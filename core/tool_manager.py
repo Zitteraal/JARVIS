@@ -24,6 +24,15 @@ class ToolManager:
                     "parameters": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}
                 }
             },
+
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_system_stats",
+                    "description": "Returns real-time CPU, RAM, and GPU usage percentages.",
+                    "parameters": {"type": "object", "properties": {}, "required": []}
+                }
+            },
             {
                 "type": "function",
                 "function": {
@@ -189,6 +198,23 @@ class ToolManager:
 
         elif tool_name == "uninstall_with_revo":
             return AdminTools.uninstall_with_revo(arguments.get("program_name", ""))
+
+        elif tool_name == "get_system_stats":
+            import psutil
+            import pynvml
+            
+            cpu = psutil.cpu_percent()
+            ram = psutil.virtual_memory().percent
+            gpu = 0.0
+            
+            try:
+                pynvml.nvmlInit()
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                gpu = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
+            except:
+                pass
+                
+            return f"Live System Stats:\nCPU: {cpu}%\nRAM: {ram}%\nGPU: {gpu}%\n"
             
         elif tool_name == "execute_admin_command":
             return AdminTools.execute_as_admin(arguments.get("command", ""))

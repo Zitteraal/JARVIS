@@ -1,34 +1,48 @@
 """
-J.A.R.V.I.S. – Persönlicher KI-Assistent
-Einstiegspunkt. Startet die Qt/QML-Anwendung und verbindet
-das Python-Backend mit der QML-Oberfläche.
+EVOX – Personal Intelligence Workspace
+Einstiegspunkt. Startet die Qt/QML-Anwendung.
 """
 import sys
 import os
+import ctypes
 from pathlib import Path
 
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import QUrl
 
 from interface.backend import Backend
 
-
 def main() -> int:
-    # QtQuick Controls im "Basic"-Stil (stylebar, plattformunabhängig)
+    # 1. WINDOWS APP ID (Verhindert das Python-Logo in der Taskleiste)
+    try:
+        myappid = "EVOX.PersonalIntelligenceWorkspace"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception as e:
+        print(f"AppUserModelID konnte nicht gesetzt werden: {e}")
+
+    # QtQuick Controls im "Basic"-Stil
     os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Basic")
 
     app = QGuiApplication(sys.argv)
-    app.setApplicationName("J.A.R.V.I.S.")
-    app.setOrganizationName("JARVIS")
-    app.setApplicationVersion("0.1.0")
+    app.setApplicationName("EVOX")
+    app.setOrganizationName("EVOX Systems")
+    app.setApplicationVersion("1.0.0")
+
+    # 2. DAS EVOX ICON LADEN
+    base_dir = Path(__file__).parent
+    icon_path = base_dir / "assets" / "evox_app_icon.ico"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
+    else:
+        print(f"Warnung: EVOX Icon nicht gefunden unter {icon_path}")
 
     backend = Backend()
 
     engine = QQmlApplicationEngine()
 
     # QML-Importpfade
-    qml_dir = Path(__file__).parent / "interface" / "qml"
+    qml_dir = base_dir / "interface" / "qml"
     engine.addImportPath(str(qml_dir))
 
     # Backend als globales Objekt in QML verfügbar machen

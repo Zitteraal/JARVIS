@@ -2,6 +2,7 @@ import threading
 from datetime import datetime
 import httpx
 import psutil
+import pynvml
 from PySide6.QtCore import QObject, Property, QTimer, Signal, Slot
 
 from config import settings
@@ -11,6 +12,8 @@ from memory.database import Database
 from memory.memory_manager import MemoryManager
 from memory.extractor import MemoryExtractor
 from voice.text_to_speech import TextToSpeech
+from voice.speech_to_text import VoiceAssistant
+from system_administration.file_manager import FileManager
 
 class Backend(QObject):
     # --- Streaming ---
@@ -32,9 +35,12 @@ class Backend(QObject):
     memoryChanged = Signal()
     memoryAdded = Signal(str)
 
-    # --- Sicherheit ---
-    confirmRequested = Signal(str) # Sendet den Programmnamen an die UI
+    # --- Sicherheit & System ---
+    confirmRequested = Signal(str)
     systemMessageAdded = Signal(str)
+    
+    # --- Sprache ---
+    textRecognized = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -43,6 +49,13 @@ class Backend(QObject):
         self._mm = MemoryManager(self._db)
         self._cm = ContextManager(self._mm)
         self._tts = TextToSpeech()
+        
+        # Voice Assistant
+        self._voice = VoiceAssistant()
+        # WICHTIG: Text wird jetzt an das UI gesendet, nicht direkt abgeschickt
+        self._voice.transcriptionReady.connect(self.textRecognized.emit) 
+        self._voice.listeningChanged.connect(self._on_listening_changed)
+        self._is_listening = False
 
         self._conversation_id = self._ensure_active_conversation()
         self._history = self._load_history()
@@ -52,9 +65,19 @@ class Backend(QObject):
         self._ollama_message = "Nicht verbunden"
         self._cpu = 0.0
         self._ram = 0.0
+        self._gpu = 0.0
         self._thread = None
         self._worker = None
         self._extractor_thread = None
+        
+        # GPU Initialisierung
+        try:
+            pynvml.nvmlInit()
+            self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+            self._has_gpu = True
+        except Exception:
+            self._has_gpu = False
+            self._nvml_handle = None
 
         self._stats_timer = QTimer(self)
         self._stats_timer.timeout.connect(self._tick)
@@ -84,6 +107,13 @@ class Backend(QObject):
         try:
             self._cpu = psutil.cpu_percent(interval=None)
             self._ram = psutil.virtual_memory().percent
+            
+            if self._has_gpu:
+                try:
+                    util = pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle)
+                    self._gpu = float(util.gpu)
+                except Exception:
+                    self._gpu = 0.0
         except Exception:
             pass
         self.systemStatsChanged.emit()
@@ -146,9 +176,20 @@ class Backend(QObject):
         self._thread = thread
         thread.start()
 
+    @Slot()
+    def startListening(self):
+        self._voice.start_recording()
+
+    @Slot()
+    def stopListening(self):
+        self._voice.stop_recording()
+
+    def _on_listening_changed(self, is_listening: bool):
+        self._is_listening = is_listening
+        self.systemStatsChanged.emit()
+
     @Slot(bool)
     def respondToConfirmation(self, confirmed: bool) -> None:
-        """Wird aufgerufen, wenn der Nutzer im UI auf Ja oder Nein klickt."""
         if self._worker:
             self._worker.set_confirmation(confirmed)
 
@@ -246,6 +287,15 @@ class Backend(QObject):
         if self._mm.delete(mem_id):
             self.memoryChanged.emit()
 
+    @Slot(result=str)
+    def getHomeDirectory(self) -> str:
+        import os
+        return os.path.expanduser("~").replace("\\", "/")
+
+    @Slot(str, result="QVariantList")
+    def listDirectory(self, path: str) -> list:
+        return FileManager.list_directory(path)
+
     @Property(str, notify=stateChanged)
     def state(self): return self._state
 
@@ -260,6 +310,12 @@ class Backend(QObject):
 
     @Property(float, notify=systemStatsChanged)
     def ramPercent(self): return self._ram
+
+    @Property(float, notify=systemStatsChanged)
+    def gpuPercent(self): return self._gpu
+
+    @Property(bool, notify=systemStatsChanged)
+    def isListening(self): return self._is_listening
 
     @Property(str, notify=timeChanged)
     def currentTime(self): return datetime.now().strftime("%H:%M:%S")

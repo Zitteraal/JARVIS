@@ -1,3 +1,5 @@
+import sys
+sys.coinit_flags = 2 # Zwingt Windows in den STA-Modus (behebt den Threadmodus-Fehler)
 import pythoncom
 from pywinauto import Desktop
 

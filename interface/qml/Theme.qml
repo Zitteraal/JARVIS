@@ -1,38 +1,29 @@
 import QtQuick
 
 QtObject {
-    // Hintergrund
-    readonly property color bg:          "#08080b"
-    readonly property color bgDeep:      "#0c0b10"
-    readonly property color bgCard:      "#111017"
-    readonly property color bgCardHi:    "#17161f"
+    // Farbpalette (Exakt nach Vorgabe)
+    readonly property color bg:          "#0B1011" // Deep Graphite
+    readonly property color bgNav:       "#141C1A" // Command Panel
+    readonly property color bgSurface:   "#1C2722" // Elevated Surface
 
-    // Akzente
-    readonly property color accent:      "#ff5e1a"
-    readonly property color accentDim:   "#a83a0e"
-    readonly property color gold:        "#ffb347"
-    readonly property color info:        "#5ab0ff"
-    readonly property color goldBright:  "#ffd58a"
+    readonly property color accent:      "#B7F36B" // Signal Lime
+    readonly property color accentDim:   "#788875" // Tactical Olive
 
-    // Text
-    readonly property color text:        "#eae6df"
-    readonly property color textDim:     "#8a8078"
-    readonly property color textFaint:   "#5a5048"
+    readonly property color text:        "#E5EBE5" // Soft White
+    readonly property color textDim:     "#8B9790" // Muted Gray
+    readonly property color textFaint:   "#4a544f"
 
-    // Zustände
-    readonly property color ok:          "#4fd48a"
-    readonly property color warning:     "#ffb347"
-    readonly property color danger:      "#ff4b3e"
+    readonly property color warning:     "#F2B84B" // Warning Amber
+    readonly property color danger:      "#E85B5B" // Critical Red
 
-    // Rahmen
-    readonly property color border:      "#2a1e18"
-    readonly property color borderHi:    "#3d2a20"
+    readonly property color border:      "#1f2b26"
+    readonly property color borderHi:    "#2d3d36"
 
-    // Typo
-    readonly property string fontMain:   "Segoe UI"
-    readonly property string fontMono:   "Consolas"
+    // Typografie (Inter & JetBrains Mono Fallbacks)
+    readonly property string fontMain:   "Segoe UI" // Fallback für Inter
+    readonly property string fontMono:   "Consolas" // Fallback für JetBrains Mono
 
-    // Geometrie
-    readonly property int radius:        8
-    readonly property int radiusSm:      4
+    // Geometrie (Minimalistisch, keine Pill-Shapes)
+    readonly property int radius:        4
+    readonly property int radiusSm:      2
 }

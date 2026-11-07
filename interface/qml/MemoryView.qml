@@ -4,32 +4,23 @@ import QtQuick.Layouts
 
 Item {
     id: root
-    property QtObject theme
+    Theme { id: theme } // <--- Lädt das Design direkt selbst
     property string filter: "all"
 
-    // Farbzuordnung pro Kategorie
     function categoryColor(cat) {
         switch (cat) {
-            case "personal":    return theme.gold
-            case "preference":  return theme.accent
-            case "project":     return theme.info
-            case "task":        return theme.warning
-            case "instruction": return theme.danger
+            case "personal":    return theme.accent
+            case "preference":  return theme.info
+            case "project":     return theme.warning
+            case "task":        return theme.danger
             default:            return theme.textDim
         }
     }
+    
     function categoryLabel(cat) {
-        switch (cat) {
-            case "personal":    return "PERSÖNLICH"
-            case "preference":  return "VORLIEBE"
-            case "project":     return "PROJEKT"
-            case "task":        return "AUFGABE"
-            case "instruction": return "ANWEISUNG"
-            default:            return cat.toUpperCase()
-        }
+        return cat.toUpperCase()
     }
 
-    // sichtbare Liste (gefiltert)
     property var visibleMemories: {
         const all = backend.memories
         if (filter === "all") return all
@@ -39,65 +30,46 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: 32
-        spacing: 16
+        spacing: 24
 
-        // Kopfzeile
         RowLayout {
             Layout.fillWidth: true
-            spacing: 12
-
-            Column {
-                Layout.fillWidth: true
-                spacing: 2
-                Text {
-                    text: "GEDÄCHTNIS"
-                    color: theme.text
-                    font.family: theme.fontMono
-                    font.pixelSize: 18
-                    font.letterSpacing: 4
-                    font.weight: Font.DemiBold
-                }
-                Text {
-                    text: backend.memoryCount + " dauerhafte Erinnerungen · werden automatisch aus Gesprächen extrahiert"
-                    color: theme.textDim
-                    font.family: theme.fontMain
-                    font.pixelSize: 12
-                }
+            ColumnLayout {
+                Text { text: "Memory Banks"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
+                Text { text: backend.memoryCount + " permanent memories extracted from conversations."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 14 }
             }
+            Item { Layout.fillWidth: true }
         }
 
-        // Filter-Chips
         Flow {
             Layout.fillWidth: true
             spacing: 8
-
             Repeater {
                 model: [
-                    { key: "all",         label: "ALLE" },
-                    { key: "personal",    label: "PERSÖNLICH" },
-                    { key: "preference",  label: "VORLIEBEN" },
-                    { key: "project",     label: "PROJEKTE" },
-                    { key: "task",        label: "AUFGABEN" },
-                    { key: "instruction", label: "ANWEISUNGEN" }
+                    { key: "all",         label: "ALL" },
+                    { key: "personal",    label: "PERSONAL" },
+                    { key: "preference",  label: "PREFERENCES" },
+                    { key: "project",     label: "PROJECTS" },
+                    { key: "task",        label: "TASKS" },
+                    { key: "instruction", label: "INSTRUCTIONS" }
                 ]
                 delegate: Rectangle {
                     property bool isActive: root.filter === modelData.key
                     width:  chipText.implicitWidth + 24
-                    height: 28
-                    radius: 4
-                    color:        isActive ? theme.bgCardHi : "transparent"
-                    border.color: isActive ? theme.accentDim : theme.border
+                    height: 32
+                    radius: theme.radiusSm
+                    color:        isActive ? theme.bgSurface : "transparent"
+                    border.color: isActive ? theme.accent : theme.border
                     border.width: 1
 
                     Text {
                         id: chipText
                         anchors.centerIn: parent
                         text: modelData.label
-                        color: isActive ? theme.gold : theme.textDim
-                        font.family: theme.fontMono
-                        font.pixelSize: 10
-                        font.letterSpacing: 1.4
-                        font.weight: Font.DemiBold
+                        color: isActive ? theme.accent : theme.textDim
+                        font.family: theme.fontMain
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -108,64 +80,37 @@ Item {
             }
         }
 
-        // Liste
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: theme.radius
-            color: theme.bgCard
+            color: theme.bgSurface
             border.color: theme.border
             border.width: 1
             clip: true
 
-            // Empty state
-            Column {
+            ColumnLayout {
                 anchors.centerIn: parent
                 visible: root.visibleMemories.length === 0
-                spacing: 8
-                Text {
-                    text: "◌"
-                    color: theme.textFaint
-                    font.pixelSize: 48
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                Text {
-                    text: root.filter === "all"
-                        ? "Noch keine Erinnerungen gespeichert."
-                        : "Keine Einträge in dieser Kategorie."
-                    color: theme.textDim
-                    font.family: theme.fontMain
-                    font.pixelSize: 13
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
-                Text {
-                    text: "Erzähle J.A.R.V.I.S. etwas über dich – er merkt es sich."
-                    color: theme.textFaint
-                    font.family: theme.fontMain
-                    font.pixelSize: 11
-                    anchors.horizontalCenter: parent.horizontalCenter
-                }
+                Text { text: "No memories found."; color: theme.textFaint; font.family: theme.fontMain; font.pixelSize: 16; Layout.alignment: Qt.AlignHCenter }
+                Text { text: "Tell EVOX something about yourself."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 13; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 8 }
             }
 
             ListView {
                 id: memList
                 anchors.fill: parent
-                anchors.margins: 12
+                anchors.margins: 16
                 clip: true
-                spacing: 8
+                spacing: 12
                 model: root.visibleMemories
-
-                ScrollBar.vertical: ScrollBar {
-                    policy: ScrollBar.AsNeeded
-                    width: 6
-                }
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded; width: 6 }
 
                 delegate: Rectangle {
                     id: memItem
                     width: memList.width
                     height: itemContent.implicitHeight + 24
                     radius: theme.radiusSm
-                    color: theme.bgCardHi
+                    color: theme.bg
                     border.color: theme.border
                     border.width: 1
 
@@ -175,21 +120,17 @@ Item {
                         id: itemContent
                         anchors.fill: parent
                         anchors.margins: 12
-                        spacing: 6
+                        spacing: 8
 
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 10
 
                             Rectangle {
-                                width:  catLabel.implicitWidth + 14
-                                height: 18
+                                width:  catLabel.implicitWidth + 12
+                                height: 20
                                 radius: 3
-                                color:  Qt.rgba(
-                                    root.categoryColor(modelData.category).r,
-                                    root.categoryColor(modelData.category).g,
-                                    root.categoryColor(modelData.category).b,
-                                    0.15)
+                                color:  Qt.rgba(root.categoryColor(modelData.category).r, root.categoryColor(modelData.category).g, root.categoryColor(modelData.category).b, 0.15)
                                 border.color: root.categoryColor(modelData.category)
                                 border.width: 1
                                 Text {
@@ -197,75 +138,52 @@ Item {
                                     anchors.centerIn: parent
                                     text: root.categoryLabel(modelData.category)
                                     color: root.categoryColor(modelData.category)
-                                    font.family: theme.fontMono
+                                    font.family: theme.fontMain
                                     font.pixelSize: 9
-                                    font.letterSpacing: 1.2
-                                    font.weight: Font.DemiBold
+                                    font.weight: Font.Bold
                                 }
                             }
-                            Text {
-                                text: modelData.source === "auto" ? "auto" : "manuell"
-                                color: theme.textFaint
-                                font.family: theme.fontMono
-                                font.pixelSize: 9
-                                font.letterSpacing: 1
-                            }
-                            Text {
-                                text: modelData.created_at
-                                color: theme.textFaint
-                                font.family: theme.fontMono
-                                font.pixelSize: 9
-                            }
+                            Text { text: modelData.source === "auto" ? "auto-extracted" : "manual"; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 10 }
+                            Text { text: modelData.created_at; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 10 }
                             Item { Layout.fillWidth: true }
 
-                            // Bearbeiten-Icon
-                            Rectangle {
-                                width: 24; height: 24; radius: 3
-                                color: editMouse.containsMouse ? theme.bgCard : "transparent"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: memItem.editing ? "✕" : "✎"
-                                    color: theme.textDim
-                                    font.pixelSize: 13
-                                }
-                                MouseArea {
-                                    id: editMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (memItem.editing) {
-                                            memItem.editing = false
-                                        } else {
-                                            memItem.editing = true
-                                            editField.text = modelData.content
-                                            editField.forceActiveFocus()
+                            RowLayout {
+                                spacing: 4
+                                Rectangle {
+                                    width: 24; height: 24; radius: theme.radiusSm
+                                    color: editMouse.containsMouse ? theme.bgSurface : "transparent"
+                                    Text { anchors.centerIn: parent; text: memItem.editing ? "✕" : "✎"; color: theme.textDim; font.pixelSize: 12 }
+                                    MouseArea {
+                                        id: editMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (memItem.editing) {
+                                                memItem.editing = false
+                                            } else {
+                                                memItem.editing = true
+                                                editField.text = modelData.content
+                                                editField.forceActiveFocus()
+                                            }
                                         }
                                     }
                                 }
-                            }
-
-                            // Löschen-Icon
-                            Rectangle {
-                                width: 24; height: 24; radius: 3
-                                color: delMouse.containsMouse ? "#2a0e0c" : "transparent"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "🗑"
-                                    color: delMouse.containsMouse ? theme.danger : theme.textDim
-                                    font.pixelSize: 12
-                                }
-                                MouseArea {
-                                    id: delMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.deleteMemory(modelData.id)
+                                Rectangle {
+                                    width: 24; height: 24; radius: theme.radiusSm
+                                    color: delMouse.containsMouse ? Qt.rgba(0.9,0.3,0.3,0.2) : "transparent"
+                                    Text { anchors.centerIn: parent; text: "🗑"; color: delMouse.containsMouse ? theme.danger : theme.textDim; font.pixelSize: 11 }
+                                    MouseArea {
+                                        id: delMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: backend.deleteMemory(modelData.id)
+                                    }
                                 }
                             }
                         }
 
-                        // Anzeige-Modus
                         Text {
                             Layout.fillWidth: true
                             visible: !memItem.editing
@@ -276,7 +194,6 @@ Item {
                             wrapMode: Text.Wrap
                         }
 
-                        // Edit-Modus
                         RowLayout {
                             Layout.fillWidth: true
                             visible: memItem.editing
@@ -284,40 +201,30 @@ Item {
 
                             Rectangle {
                                 Layout.fillWidth: true
-                                height: 34
-                                radius: 3
-                                color: "#0c0c10"
-                                border.color: theme.accentDim
+                                height: 36
+                                radius: theme.radiusSm
+                                color: theme.bgSurface
+                                border.color: theme.accent
                                 border.width: 1
-
                                 TextArea {
                                     id: editField
                                     anchors.fill: parent
-                                    anchors.margins: 6
-                                    topPadding: 0
-                                    bottomPadding: 0
-                                    leftPadding: 0
-                                    rightPadding: 0
+                                    anchors.margins: 8
+                                    topPadding: 0; bottomPadding: 0; leftPadding: 0; rightPadding: 0
                                     color: theme.text
                                     font.family: theme.fontMain
-                                    font.pixelSize: 12
+                                    font.pixelSize: 13
                                     background: null
                                     wrapMode: TextArea.Wrap
                                 }
                             }
 
                             Rectangle {
-                                width: 60; height: 34; radius: 3
-                                color: saveMouse.containsMouse ? theme.accent : theme.accentDim
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "SPEICHERN"
-                                    color: "#1a0a02"
-                                    font.family: theme.fontMono
-                                    font.pixelSize: 9
-                                    font.weight: Font.Bold
-                                    font.letterSpacing: 1
-                                }
+                                width: 80; height: 36; radius: theme.radiusSm
+                                color: saveMouse.containsMouse ? theme.accent : theme.bgSurface
+                                border.color: theme.accent
+                                border.width: 1
+                                Text { anchors.centerIn: parent; text: "Save"; color: saveMouse.containsMouse ? theme.bg : theme.accent; font.family: theme.fontMain; font.pixelSize: 12; font.weight: Font.Bold }
                                 MouseArea {
                                     id: saveMouse
                                     anchors.fill: parent
