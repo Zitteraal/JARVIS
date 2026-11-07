@@ -4,7 +4,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
-    Theme { id: theme } // <--- Lädt das Design direkt selbst
+    Theme { id: theme }
     property string filter: "all"
 
     function categoryColor(cat) {
@@ -130,7 +130,8 @@ Item {
                                 width:  catLabel.implicitWidth + 12
                                 height: 20
                                 radius: 3
-                                color:  Qt.rgba(root.categoryColor(modelData.category).r, root.categoryColor(modelData.category).g, root.categoryColor(modelData.category).b, 0.15)
+                                color:  root.categoryColor(modelData.category)
+                                opacity: 0.15 // <--- FIX: Kein Qt.rgba mehr, sondern Opacity
                                 border.color: root.categoryColor(modelData.category)
                                 border.width: 1
                                 Text {

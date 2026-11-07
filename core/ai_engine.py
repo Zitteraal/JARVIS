@@ -9,7 +9,7 @@ class ChatWorker(QObject):
     finished = Signal(str)
     failed = Signal(str)
     confirmRequired = Signal(str, str)
-    systemMessage = Signal(str) # NEU: Für Tool-Ergebnisse
+    systemMessage = Signal(str)
 
     def __init__(self, messages: list[dict], model: str, tools: list | None = None):
         super().__init__()
@@ -25,6 +25,8 @@ class ChatWorker(QObject):
 
     def run(self) -> None:
         full = ""
+        tool_executed = False
+        
         try:
             with httpx.Client(timeout=120) as client:
                 for _ in range(5):
@@ -45,11 +47,10 @@ class ChatWorker(QObject):
                     data = resp.json()
                     message = data.get("message", {})
                     
-                    print(f"\n--- OLLAMA RÜCKMELDUNG ---\n{message}\n---------------------------\n")
-                    
                     tool_calls = message.get("tool_calls", [])
                     
                     if tool_calls:
+                        tool_executed = True
                         self._messages.append(message)
                         
                         for tool_call in tool_calls:
@@ -63,12 +64,16 @@ class ChatWorker(QObject):
                                 except:
                                     arguments = {}
 
-                            if tool_name in ["uninstall_with_revo", "execute_admin_command", "uninstall_program"]:
-                                prog_name = arguments.get("program_name", arguments.get("command", "Unknown Action"))
+                            # --- SICHERHEITSSPERRE ---
+                            if tool_name in ["uninstall_with_revo", "execute_admin_command", "uninstall_program", "delete_project"]:
+                                prog_name = arguments.get("program_name", arguments.get("command", arguments.get("project_name", "Unknown Action")))
                                 self._confirm_event.clear()
                                 self._is_confirmed = False
                                 
+                                print(f"DEBUG: Warte auf Bestätigung für {tool_name} ({prog_name})")
                                 self.confirmRequired.emit(tool_name, prog_name)
+                                
+                                # Wartet hier, bis das Popup geantwortet hat!
                                 self._confirm_event.wait() 
                                 
                                 if not self._is_confirmed:
@@ -76,6 +81,7 @@ class ChatWorker(QObject):
                                     self._messages.append({"role": "tool", "content": result})
                                     self.systemMessage.emit(result)
                                     continue
+                            # -------------------------
 
                             from core.tool_manager import ToolManager
                             tm = ToolManager()
@@ -85,12 +91,15 @@ class ChatWorker(QObject):
                                 "role": "tool",
                                 "content": result
                             })
-                            # Sendet die Nachricht an die UI
                             self.systemMessage.emit(result)
                         
                         continue 
                     else:
                         full = message.get("content", "")
+                        
+                        if not full.strip() and tool_executed:
+                            full = "Action completed successfully, Sir."
+                            
                         self.chunk.emit(full)
                         break
                         

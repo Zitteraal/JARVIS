@@ -52,7 +52,6 @@ class Backend(QObject):
         
         # Voice Assistant
         self._voice = VoiceAssistant()
-        # WICHTIG: Text wird jetzt an das UI gesendet, nicht direkt abgeschickt
         self._voice.transcriptionReady.connect(self.textRecognized.emit) 
         self._voice.listeningChanged.connect(self._on_listening_changed)
         self._is_listening = False
@@ -165,6 +164,10 @@ class Backend(QObject):
         from core.tool_manager import ToolManager
         tm = ToolManager()
         worker = ai_engine.ChatWorker(messages, settings.OLLAMA_MODEL, tools=tm.get_tools_definition())
+        
+        # WICHTIG: Worker ZUERST zuweisen, damit respondToConfirmation darauf zugreifen kann
+        self._worker = worker
+        
         worker.chunk.connect(self.responseChunk)
         worker.finished.connect(self._on_worker_finished)
         worker.failed.connect(self._on_worker_failed)
@@ -172,7 +175,6 @@ class Backend(QObject):
         worker.systemMessage.connect(self.systemMessageAdded.emit)
 
         thread = threading.Thread(target=worker.run, daemon=True)
-        self._worker = worker
         self._thread = thread
         thread.start()
 
@@ -194,6 +196,7 @@ class Backend(QObject):
             self._worker.set_confirmation(confirmed)
 
     def _on_confirm_required(self, tool_name: str, arg: str) -> None:
+        # Sendet das Signal an das QML (main.qml) um das Popup zu öffnen
         self.confirmRequested.emit(arg)
 
     @Slot()

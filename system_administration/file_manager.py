@@ -1,4 +1,5 @@
 import os
+import shutil
 import win32com.client
 from pathlib import Path
 
@@ -27,7 +28,6 @@ class FileManager:
 
     @staticmethod
     def list_directory(path: str) -> list:
-        """Listet den Inhalt eines Ordners auf."""
         if not path or path == "~":
             path = os.path.expanduser("~")
         
@@ -46,9 +46,23 @@ class FileManager:
                         })
                     except Exception:
                         pass
-        except Exception as e:
+        except Exception:
             return []
             
-        # Ordner nach oben, dann alphabetisch sortieren
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
         return items
+
+    @staticmethod
+    def delete_project(project_name: str) -> str:
+        try:
+            # Sucht den Ordner im EVOX_Projects Verzeichnis auf dem Desktop
+            desktop = Path(os.path.expanduser("~")) / "Desktop" / "EVOX_Projects"
+            project_path = desktop / project_name
+            
+            if project_path.exists() and project_path.is_dir():
+                shutil.rmtree(project_path)
+                return f"Success: Project '{project_name}' has been permanently deleted."
+            else:
+                return f"Error: Project '{project_name}' not found in EVOX_Projects."
+        except Exception as e:
+            return f"Error deleting project: {str(e)}"
