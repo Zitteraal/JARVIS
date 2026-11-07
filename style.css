@@ -1,0 +1,57 @@
+body 
+  font-family: 'Segoe UI', sans-serif;
+    background: '0B1011;
+      color: 'E5EBE5;
+        text-align: center;
+          padding: 50px;
+
+
+          .products 
+            display: flex;
+              justify-content: center;
+                gap: 20px;
+                  margin-bottom: 40px;
+
+
+                  .product 
+                    background: '1A1F20;
+                      border: 1px solid '2C3132;
+                        padding: 20px;
+                          border-radius: 8px;
+                            width: 200px;
+
+
+                            button 
+                              background: '4A90E2;
+                                border: none;
+                                  padding: 10px 15px;
+                                    border-radius: 4px;
+                                      color: white;
+                                        cursor: pointer;
+
+
+                                        button:hover 
+                                          background: '357ABD;
+
+
+                                          .cart 
+                                            margin-top: 40px;
+                                              background: '1A1F20;
+                                                border: 1px solid '2C3132;
+                                                  padding: 20px;
+                                                    border-radius: 8px;
+
+
+                                                    'cart-items 
+                                                      list-style-type: none;
+                                                        padding: 0;
+
+
+                                                        'cart-items li 
+                                                          padding: 8px 0;
+
+
+                                                          'cart-total 
+                                                            color: '4A90E2;
+                                                              font-weight: bold;
+                                                              

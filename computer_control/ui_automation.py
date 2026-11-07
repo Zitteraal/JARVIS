@@ -1,6 +1,7 @@
 import sys
-sys.coinit_flags = 2 # Zwingt Windows in den STA-Modus (behebt den Threadmodus-Fehler)
+sys.coinit_flags = 2
 import pythoncom
+import pyautogui
 from pywinauto import Desktop
 
 class UIAutomation:
@@ -25,6 +26,35 @@ class UIAutomation:
             return f"Window '{title}' focused successfully."
         except Exception as e:
             return f"Error focusing window '{title}': {e}"
+        finally:
+            pythoncom.CoUninitialize()
+
+    @staticmethod
+    def center_window(title: str) -> str:
+        """Zentriert das Fenster auf dem Bildschirm und setzt eine feste Größe."""
+        pythoncom.CoInitialize()
+        try:
+            # Finde das Fenster (Regex, da der Titel sich ständig ändert)
+            app = Desktop(backend="uia").window(title_re=f".*{title}.*")
+            if not app.exists():
+                return "Window not found."
+                
+            # Bildschirmauflösung holen
+            screen_width, screen_height = pyautogui.size()
+            
+            # Fenstergröße festlegen (z.B. 1200x800)
+            win_width = 1200
+            win_height = 800
+            
+            # Position berechnen (Mittelpunkt)
+            x = (screen_width - win_width) // 2
+            y = (screen_height - win_height) // 2
+            
+            # Fenster verschieben und skalieren
+            app.move_window(x, y, win_width, win_height)
+            return f"Window '{title}' centered."
+        except Exception as e:
+            return f"Error centering window: {e}"
         finally:
             pythoncom.CoUninitialize()
 
