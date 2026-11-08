@@ -14,13 +14,11 @@ class VoiceAssistant(QObject):
         self._thread = None
         self._audio_buffer = []
         
-        print("Lade Whisper (STT) Modell auf CPU...")
-        # device="cpu" verhindert den CUDA-Fehler (fehlende DLLs)
+        print("Lade Whisper (STT) Modell...")
         self.whisper = WhisperModel("base", device="cpu", compute_type="int8")
         
         self.samplerate = 16000
         self.chunk_size = 1280 
-        # Nutzt dein echtes Mikrofon (Index 2 aus deiner Liste)
         self.device_index = 2 
 
     def start_recording(self):
@@ -46,14 +44,22 @@ class VoiceAssistant(QObject):
 
     def _record_loop(self):
         try:
+            # Versuch 1: Mono (1 Kanal)
             with sd.InputStream(device=self.device_index, samplerate=self.samplerate, channels=1, dtype='int16', blocksize=self.chunk_size) as stream:
                 while self._is_recording:
                     audio_chunk, _ = stream.read(self.chunk_size)
                     self._audio_buffer.append(audio_chunk.flatten())
-        except Exception as e:
-            print(f"Mikrofon-Fehler beim Aufnehmen: {e}")
-            self._is_recording = False
-            self.listeningChanged.emit(False)
+        except sd.PortAudioError:
+            try:
+                # Versuch 2: Stereo (2 Kanäle) und dann auf Mono reduzieren
+                with sd.InputStream(device=self.device_index, samplerate=self.samplerate, channels=2, dtype='int16', blocksize=self.chunk_size) as stream:
+                    while self._is_recording:
+                        audio_chunk, _ = stream.read(self.chunk_size)
+                        self._audio_buffer.append(audio_chunk[:, 0]) # Nur linken Kanal nehmen
+            except Exception as e:
+                print(f"Mikrofon-Fehler beim Aufnehmen: {e}")
+                self._is_recording = False
+                self.listeningChanged.emit(False)
 
     def _transcribe(self, audio_data):
         print("Transcribing...")

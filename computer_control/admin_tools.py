@@ -1,23 +1,19 @@
-import ctypes
 import subprocess
 import os
-from pathlib import Path
 
 class AdminTools:
     @staticmethod
     def execute_as_admin(command: str) -> str:
-        """Führt einen Befehl mit Administratorrechten (UAC) aus."""
         try:
-            # 1 = SW_SHOWNORMAL, "runas" triggert den UAC Prompt
-            ctypes.windll.shell32.ShellExecuteW(None, "runas", command, None, None, 1)
-            return f"Admin command executed: {command}"
+            # Da EVOX bereits Admin ist, können wir Befehle direkt ausführen
+            subprocess.Popen(command, shell=True)
+            return f"Command executed: {command}"
         except Exception as e:
-            return f"Error executing admin command: {e}"
+            return f"Error executing command: {e}"
 
     @staticmethod
-    def uninstall_with_revo(program_name: str) -> str:
-        """Sucht Revo Uninstaller und startet die Deinstallation."""
-        # Mögliche Standard-Pfade für Revo Uninstaller
+    def launch_revo_admin() -> str:
+        """Startet Revo Uninstaller. Da EVOX Admin ist, gibt es keinen UAC-Prompt mehr."""
         revo_paths = [
             r"C:\Program Files\VS Revo Group\Revo Uninstaller\RevoUnin.exe",
             r"C:\Program Files (x86)\VS Revo Group\Revo Uninstaller\RevoUnin.exe",
@@ -32,12 +28,11 @@ class AdminTools:
                 break
                 
         if not revo_exe:
-            return "Error: Revo Uninstaller not found. Please install it or use the standard uninstaller."
+            return "Error: Revo Uninstaller not found."
             
         try:
-            # Revo unterstützt den Parameter /uninstall "Programmname"
-            cmd = f'"{revo_exe}" /uninstall "{program_name}"'
-            subprocess.Popen(cmd, shell=True)
-            return f"Revo Uninstaller launched for '{program_name}'. Please follow the Revo dialogs."
+            # Startet Revo. Da EVOX schon Admin ist, ploppt KEIN UAC auf.
+            subprocess.Popen(revo_exe)
+            return "Success: Launched Revo Uninstaller with inherited Admin rights."
         except Exception as e:
             return f"Error launching Revo: {e}"
