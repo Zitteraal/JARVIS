@@ -3,12 +3,14 @@ import threading
 import httpx
 from PySide6.QtCore import QObject, Signal
 from config import settings
+from core.tool_result import ToolResult
 
 class ChatWorker(QObject):
     chunk = Signal(str)
     finished = Signal(str)
     failed = Signal(str)
     confirmRequired = Signal(str, str)
+    confirmCancelled = Signal()
     systemMessage = Signal(str)
 
     def __init__(self, messages: list[dict], model: str, tools: list | None = None):
@@ -26,6 +28,7 @@ class ChatWorker(QObject):
     def run(self) -> None:
         full = ""
         tool_executed = False
+        tool_results = []
         
         try:
             with httpx.Client(timeout=120) as client:
@@ -46,52 +49,54 @@ class ChatWorker(QObject):
                         
                     data = resp.json()
                     message = data.get("message", {})
-                    
                     tool_calls = message.get("tool_calls", [])
                     content = message.get("content", "")
                     
                     if tool_calls:
                         tool_executed = True
                         self._messages.append(message)
+                        cancelled = False # NEU: Variable für Abbruch
                         
                         for tool_call in tool_calls:
                             function = tool_call.get("function", {})
                             tool_name = function.get("name")
                             arguments = function.get("arguments", {})
                             
-                            # --- ROBUSTE JSON VERARBEITUNG ---
                             if isinstance(arguments, str):
                                 try:
                                     arguments = json.loads(arguments)
-                                except Exception as e:
-                                    print(f"JSON PARSE ERROR: {e}")
-                                    print(f"RAW ARGUMENTS: {arguments}")
+                                except:
                                     arguments = {}
-                            # ---------------------------------
 
-                            if tool_name in ["uninstall_with_revo", "execute_admin_command", "uninstall_program", "delete_project"]:
-                                prog_name = arguments.get("program_name", arguments.get("command", arguments.get("project_name", "Unknown Action")))
+                            if tool_name in ["uninstall_with_revo_visually", "execute_admin_command", "delete_project", "propose_code_fix"]:
+                                prog_name = arguments.get("program_name", arguments.get("command", arguments.get("project_name", arguments.get("filename", "Unknown Action"))))
                                 self._confirm_event.clear()
                                 self._is_confirmed = False
                                 
                                 self.confirmRequired.emit(tool_name, prog_name)
-                                self._confirm_event.wait() 
                                 
-                                if not self._is_confirmed:
-                                    result = "Action cancelled by user."
-                                    self._messages.append({"role": "tool", "content": result})
-                                    self.systemMessage.emit(result)
-                                    continue
+                                confirmed = self._confirm_event.wait(timeout=120.0)
+                                if not confirmed or not self._is_confirmed:
+                                    self.confirmCancelled.emit()
+                                    result = ToolResult.failure("Action cancelled by user or timeout.")
+                                    self._messages.append({"role": "tool", "content": result.to_llm_string()})
+                                    self.systemMessage.emit(result.message)
+                                    tool_results.append(result)
+                                    cancelled = True
+                                    break # Bricht die for-Schleife für die Tools ab
 
-                            from core.tool_manager import ToolManager
-                            tm = ToolManager()
-                            result = tm.execute_tool(tool_name, arguments)
+                            try:
+                                from core.tool_manager import ToolManager
+                                result = ToolManager().execute_tool(tool_name, arguments)
+                            except Exception as e:
+                                result = ToolResult.failure(f"Tool crashed: {type(e).__name__}: {e}")
                             
-                            self._messages.append({
-                                "role": "tool",
-                                "content": result
-                            })
-                            self.systemMessage.emit(result)
+                            tool_results.append(result)
+                            self._messages.append({"role": "tool", "content": result.to_llm_string()})
+                            self.systemMessage.emit(result.message)
+                        
+                        if cancelled:
+                            break # Bricht die äußere Iterations-Schleife ab
                         
                         continue 
                     else:
@@ -99,10 +104,14 @@ class ChatWorker(QObject):
                         break
                         
             if not full.strip():
-                if tool_executed:
-                    full = "Action completed successfully, Sir."
+                if tool_executed and tool_results:
+                    successes = sum(1 for r in tool_results if r.status == "success")
+                    unverified = sum(1 for r in tool_results if r.status == "unverified")
+                    failures = sum(1 for r in tool_results if r.status == "failed")
+                    summary = f"Summary: {successes} succeeded, {unverified} unverified, {failures} failed."
+                    full = summary
                 else:
-                    full = "I am ready for your next command, Sir."
+                    full = "Action cancelled."
                     
             self.chunk.emit(full)
             self.finished.emit(full)

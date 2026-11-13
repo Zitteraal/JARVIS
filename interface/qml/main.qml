@@ -17,21 +17,17 @@ Window {
 
     property string activeView: "home"
     property string pendingProgram: ""
+    property int confirmCountdown: 120
 
-    // GLOBALER SHORTCUT FÜR DAS COMMAND CENTER (STRG + K)
     Shortcut {
         sequence: "Ctrl+K"
         onActivated: commandCenterPopup.open()
     }
 
-    // Hauptlayout
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ==========================================
-        // LEFT SIDEBAR (Global Navigation)
-        // ==========================================
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: 220
@@ -44,7 +40,6 @@ Window {
                 anchors.margins: 16
                 spacing: 4
 
-                // Branding
                 Text {
                     text: "E V O X"
                     color: theme.text
@@ -65,7 +60,6 @@ Window {
                     Layout.bottomMargin: 24
                 }
 
-                // Navigation Groups
                 Text { text: "WORKSPACE"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1; Layout.topMargin: 8; Layout.bottomMargin: 4 }
                 NavButton { buttonText: "Home"; active: appWindow.activeView === "home"; onClicked: appWindow.activeView = "home" }
                 NavButton { buttonText: "Assistant"; active: appWindow.activeView === "assistant"; onClicked: appWindow.activeView = "assistant" }
@@ -78,7 +72,6 @@ Window {
                 
                 Item { Layout.fillHeight: true }
 
-                // System Status (Unten)
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 8
@@ -92,15 +85,11 @@ Window {
             }
         }
 
-        // ==========================================
-        // MAIN WORKSPACE AREA
-        // ==========================================
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            // Top Status Bar
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 48
@@ -145,7 +134,6 @@ Window {
                 }
             }
 
-            // Dynamic View Loader
             Loader {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -162,16 +150,28 @@ Window {
         }
     }
 
-    // ==========================================
-    // SICHERHEITS-POPUP
-    // ==========================================
     Popup {
         id: confirmPopup
         anchors.centerIn: parent
         width: 500
-        height: 240
+        height: 260
         modal: true
         closePolicy: Popup.NoAutoClose
+
+        Timer {
+            id: countdownTimer
+            interval: 1000
+            repeat: true
+            running: confirmPopup.visible
+            onTriggered: {
+                if (appWindow.confirmCountdown > 0) {
+                    appWindow.confirmCountdown--
+                } else {
+                    confirmPopup.close()
+                    backend.respondToConfirmation(false)
+                }
+            }
+        }
 
         background: Rectangle {
             color: theme.bgSurface
@@ -205,6 +205,14 @@ Window {
                 Layout.fillWidth: true
             }
 
+            Text {
+                text: "Time remaining: " + appWindow.confirmCountdown + "s"
+                color: theme.warning
+                font.family: theme.fontMono
+                font.pixelSize: 13
+                Layout.alignment: Qt.AlignHCenter
+            }
+
             Item { Layout.fillHeight: true }
 
             RowLayout {
@@ -232,9 +240,6 @@ Window {
         }
     }
 
-    // ==========================================
-    // GLOBAL COMMAND CENTER
-    // ==========================================
     Popup {
         id: commandCenterPopup
         anchors.centerIn: parent
@@ -310,11 +315,6 @@ Window {
         onOpened: cmdInput.forceActiveFocus()
     }
 
-    // ==========================================
-    // VIEWS
-    // ==========================================
-    
-    // --- HOME VIEW ---
     Component {
         id: homeView
         Item {
@@ -356,7 +356,6 @@ Window {
         }
     }
 
-    // --- ASSISTANT VIEW ---
     Component {
         id: assistantView
         Item {
@@ -411,15 +410,30 @@ Window {
                 anchors.margins: 24; clip: true; spacing: 20; model: chatModel
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Item {
-                    width: chatList.width; height: delegateCol.implicitHeight
+                    width: chatList.width
+                    height: delegateCol.implicitHeight
                     Column {
-                        id: delegateCol; width: parent.width; spacing: 6
+                        id: delegateCol
+                        width: parent.width
+                        spacing: 6
                         Row {
                             spacing: 10
                             Text { text: model.role === "user" ? "You" : model.role === "assistant" ? "EVOX" : "System"; color: model.role === "user" ? theme.textDim : (model.role === "assistant" ? theme.accent : theme.warning); font.family: theme.fontMain; font.pixelSize: 13; font.weight: Font.Bold }
                             Text { text: model.time; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                         }
-                        Text { width: parent.width; text: model.text; color: theme.text; font.family: theme.fontMain; font.pixelSize: 14; wrapMode: Text.Wrap; lineHeight: 1.4 }
+                        
+                        TextEdit {
+                            width: parent.width
+                            text: model.text
+                            color: theme.text
+                            font.family: theme.fontMain
+                            font.pixelSize: 14
+                            wrapMode: TextEdit.Wrap
+                            readOnly: true
+                            selectByMouse: true
+                            textFormat: TextEdit.PlainText
+                            height: contentHeight
+                        }
                     }
                 }
                 onCountChanged: Qt.callLater(() => positionViewAtEnd())
@@ -447,28 +461,16 @@ Window {
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         width: 36; height: 36; radius: theme.radiusSm
-                        
                         color: backend.isListening ? theme.danger : theme.bgNav
                         border.color: backend.isListening ? theme.danger : theme.border
                         border.width: 1
-                        
-                        Text { 
-                            anchors.centerIn: parent
-                            text: "🎤"
-                            font.pixelSize: 16 
-                            opacity: backend.state === "idle" ? 1.0 : 0.5
-                        }
-                        
+                        Text { anchors.centerIn: parent; text: "🎤"; font.pixelSize: 16; opacity: backend.state === "idle" ? 1.0 : 0.5 }
                         MouseArea { 
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             enabled: backend.state === "idle"
                             onClicked: {
-                                if (backend.isListening) {
-                                    backend.stopListening()
-                                } else {
-                                    backend.startListening()
-                                }
+                                if (backend.isListening) { backend.stopListening() } else { backend.startListening() }
                             }
                         }
                     }
@@ -489,12 +491,7 @@ Window {
                 function onResponseChunk(chunk) { if (chatModel.count > 0 && chatModel.get(chatModel.count - 1).role === "assistant") { const last = chatModel.count - 1; const prev = chatModel.get(last).text; chatModel.setProperty(last, "text", prev + chunk) } }
                 function onResponseFinished(fullText) { if (chatModel.count > 0 && chatModel.get(chatModel.count - 1).role === "assistant") chatModel.setProperty(chatModel.count - 1, "text", fullText) }
                 function onSystemMessageAdded(msg) { chatModel.append({ role: "system", text: msg, time: Qt.formatTime(new Date(), "HH:mm") }) }
-                
-                // NEU: Text aus Sprache ins Eingabefeld schreiben
-                function onTextRecognized(text) {
-                    inputArea.text = text
-                    inputArea.forceActiveFocus()
-                }
+                function onTextRecognized(text) { inputArea.text = text; inputArea.forceActiveFocus() }
             }
             function sendMessage() {
                 const t = inputArea.text.trim()
@@ -508,7 +505,6 @@ Window {
         }
     }
 
-    // --- PROJECTS VIEW ---
     Component {
         id: projectsView
         Item {
@@ -516,7 +512,6 @@ Window {
                 anchors.fill: parent; anchors.margins: 32; spacing: 24
                 Text { text: "Projects"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
                 Text { text: "Manage your codebases and development environments."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 14 }
-                
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     color: theme.bgSurface; radius: theme.radius; border.color: theme.border
@@ -530,19 +525,16 @@ Window {
         }
     }
 
-    // --- MEMORY VIEW ---
     Component {
         id: memoryView
         MemoryView { }
     }
 
-    // --- FILE WORKSPACE VIEW ---
     Component {
         id: filesView
         FileWorkspace { }
     }
 
-    // --- SYSTEM ANALYSIS VIEW ---
     Component {
         id: systemView
         Item {
@@ -550,10 +542,8 @@ Window {
                 anchors.fill: parent; anchors.margins: 32; spacing: 24
                 Text { text: "System Analysis"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
                 Text { text: "Live hardware diagnostics."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 14 }
-                
                 RowLayout {
                     Layout.fillWidth: true; spacing: 16
-                    
                     Rectangle {
                         Layout.fillWidth: true; height: 100; color: theme.bgSurface; radius: theme.radius; border.color: theme.border
                         ColumnLayout {
@@ -562,7 +552,6 @@ Window {
                             Text { text: Math.round(backend.cpuPercent) + " %"; color: theme.accent; font.family: theme.fontMono; font.pixelSize: 28; Layout.alignment: Qt.AlignHCenter }
                         }
                     }
-                    
                     Rectangle {
                         Layout.fillWidth: true; height: 100; color: theme.bgSurface; radius: theme.radius; border.color: theme.border
                         ColumnLayout {
@@ -571,7 +560,6 @@ Window {
                             Text { text: Math.round(backend.ramPercent) + " %"; color: theme.accent; font.family: theme.fontMono; font.pixelSize: 28; Layout.alignment: Qt.AlignHCenter }
                         }
                     }
-
                     Rectangle {
                         Layout.fillWidth: true; height: 100; color: theme.bgSurface; radius: theme.radius; border.color: theme.border
                         ColumnLayout {
@@ -581,7 +569,6 @@ Window {
                         }
                     }
                 }
-                
                 Rectangle {
                     Layout.fillWidth: true; Layout.fillHeight: true
                     color: theme.bgSurface; radius: theme.radius; border.color: theme.border
@@ -599,7 +586,11 @@ Window {
         target: backend
         function onConfirmRequested(programName) {
             appWindow.pendingProgram = programName
+            appWindow.confirmCountdown = 120
             confirmPopup.open()
+        }
+        function onConfirmCancelled() {
+            confirmPopup.close()
         }
     }
 }

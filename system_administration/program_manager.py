@@ -1,5 +1,6 @@
 import winreg
 
+
 class ProgramManager:
     @staticmethod
     def get_installed_programs() -> list:
@@ -21,29 +22,36 @@ class ProgramManager:
                             with winreg.OpenKey(key, subkey_name) as subkey:
                                 try:
                                     name = winreg.QueryValueEx(subkey, "DisplayName")[0]
-                                    # Größe in KB auslesen und in GB umrechnen
+                                except FileNotFoundError:
+                                    continue
+
+                                # Größe in KB auslesen und in GB umrechnen.
+                                # Viele Programme tragen keine Größe ein - sie dürfen deshalb
+                                # nicht aus der Liste fallen (Größe dann 0).
+                                size_gb = 0.0
+                                try:
                                     size_kb = winreg.QueryValueEx(subkey, "EstimatedSize")[0]
                                     size_gb = round(size_kb / (1024**2), 2)
-                                    
-                                    uninstall_string = ""
-                                    try:
-                                        uninstall_string = winreg.QueryValueEx(subkey, "UninstallString")[0]
-                                    except FileNotFoundError:
-                                        pass
+                                except (FileNotFoundError, TypeError):
+                                    pass
 
-                                    if name and uninstall_string: # Nur Programme mit Deinstallationsbefehl
-                                        programs.append({
-                                            "name": name,
-                                            "size_gb": size_gb,
-                                            "uninstall_string": uninstall_string
-                                        })
+                                uninstall_string = ""
+                                try:
+                                    uninstall_string = winreg.QueryValueEx(subkey, "UninstallString")[0]
                                 except FileNotFoundError:
                                     pass
+
+                                if name and uninstall_string:  # Nur Programme mit Deinstallationsbefehl
+                                    programs.append({
+                                        "name": name,
+                                        "size_gb": size_gb,
+                                        "uninstall_string": uninstall_string
+                                    })
                         except OSError:
                             continue
             except OSError:
                 continue
-                
+
         # Duplikate filtern und nach Größe sortieren
         unique_programs = {p['name']: p for p in programs}.values()
         sorted_programs = sorted(unique_programs, key=lambda x: x['size_gb'], reverse=True)

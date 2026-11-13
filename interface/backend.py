@@ -1,8 +1,7 @@
 import threading
+import os
 from datetime import datetime
-import httpx
-import psutil
-import pynvml
+import httpx, psutil, pynvml
 from PySide6.QtCore import QObject, Property, QTimer, Signal, Slot
 
 from config import settings
@@ -16,41 +15,28 @@ from voice.speech_to_text import VoiceAssistant
 from system_administration.file_manager import FileManager
 
 class Backend(QObject):
-    # --- Streaming ---
     responseChunk = Signal(str)
     responseFinished = Signal(str)
     responseError = Signal(str)
-
-    # --- Historie ---
     historyChanged = Signal()
     historyReloaded = Signal()
-
-    # --- Status ---
     stateChanged = Signal()
     ollamaStatusChanged = Signal()
     systemStatsChanged = Signal()
     timeChanged = Signal()
-
-    # --- Gedächtnis ---
     memoryChanged = Signal()
     memoryAdded = Signal(str)
-
-    # --- Sicherheit & System ---
     confirmRequested = Signal(str)
+    confirmCancelled = Signal()
     systemMessageAdded = Signal(str)
-    
-    # --- Sprache ---
     textRecognized = Signal(str)
 
     def __init__(self):
         super().__init__()
-
         self._db = Database()
         self._mm = MemoryManager(self._db)
         self._cm = ContextManager(self._mm)
         self._tts = TextToSpeech()
-        
-        # Voice Assistant
         self._voice = VoiceAssistant()
         self._voice.transcriptionReady.connect(self.textRecognized.emit) 
         self._voice.listeningChanged.connect(self._on_listening_changed)
@@ -58,149 +44,120 @@ class Backend(QObject):
 
         self._conversation_id = self._ensure_active_conversation()
         self._history = self._load_history()
-
         self._state = "idle"
         self._ollama_ok = False
-        self._ollama_message = "Nicht verbunden"
-        self._cpu = 0.0
-        self._ram = 0.0
-        self._gpu = 0.0
+        self._ollama_message = "Prüfe Verbindung..."
+        self._cpu = self._ram = self._gpu = 0.0
         self._thread = None
         self._worker = None
-        self._extractor_thread = None
         
-        # GPU Initialisierung
         try:
             pynvml.nvmlInit()
             self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             self._has_gpu = True
-        except Exception:
-            self._has_gpu = False
-            self._nvml_handle = None
+        except Exception: self._has_gpu = False
 
         self._stats_timer = QTimer(self)
         self._stats_timer.timeout.connect(self._tick)
         self._stats_timer.start(1000)
 
-        self._check_ollama()
+        self._ollama_timer = QTimer(self)
+        self._ollama_timer.timeout.connect(self._check_ollama_async)
+        self._ollama_timer.start(30000)
+        self._check_ollama_async()
 
-    def _ensure_active_conversation(self) -> int:
+    def _ensure_active_conversation(self):
         existing = self._db.get_setting("current_conversation_id")
         if existing:
             row = self._db.query_one("SELECT id FROM conversations WHERE id = ?", (int(existing),))
-            if row:
-                return int(existing)
+            if row: return int(existing)
         new_id = self._db.insert_returning_id("INSERT INTO conversations DEFAULT VALUES")
         self._db.set_setting("current_conversation_id", str(new_id))
         return new_id
 
-    def _load_history(self) -> list[dict]:
-        rows = self._db.query(
-            "SELECT role, content FROM messages WHERE conversation_id = ? "
-            "AND role IN ('user', 'assistant') ORDER BY id ASC",
-            (self._conversation_id,),
-        )
+    def _load_history(self):
+        rows = self._db.query("SELECT role, content FROM messages WHERE conversation_id = ? AND role IN ('user', 'assistant') ORDER BY id ASC", (self._conversation_id,))
         return [{"role": r["role"], "content": r["content"]} for r in rows]
 
-    def _tick(self) -> None:
+    def _tick(self):
         try:
             self._cpu = psutil.cpu_percent(interval=None)
             self._ram = psutil.virtual_memory().percent
-            
             if self._has_gpu:
-                try:
-                    util = pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle)
-                    self._gpu = float(util.gpu)
-                except Exception:
-                    self._gpu = 0.0
-        except Exception:
-            pass
+                try: self._gpu = float(pynvml.nvmlDeviceGetUtilizationRates(self._nvml_handle).gpu)
+                except: self._gpu = 0.0
+        except: pass
         self.systemStatsChanged.emit()
         self.timeChanged.emit()
 
-    def _set_state(self, new_state: str) -> None:
+    def _set_state(self, new_state):
         if new_state != self._state:
             self._state = new_state
             self.stateChanged.emit()
 
-    def _set_ollama(self, ok: bool, message: str) -> None:
-        if ok != self._ollama_ok or message != self._ollama_message:
-            self._ollama_ok = ok
-            self._ollama_message = message
-            self.ollamaStatusChanged.emit()
+    def _check_ollama_async(self):
+        threading.Thread(target=self._check_ollama_worker, daemon=True).start()
 
-    def _check_ollama(self) -> None:
+    def _check_ollama_worker(self):
         try:
             r = httpx.get(settings.OLLAMA_TAGS_ENDPOINT, timeout=2.0)
             if r.status_code == 200:
-                data = r.json()
-                models = [m.get("name", "") for m in data.get("models", [])]
-                self._set_ollama(True, f"Verbunden · {len(models)} Modell(e)")
+                if any(settings.OLLAMA_MODEL.split(":")[0] in m.get("name", "") for m in r.json().get("models", [])):
+                    self._ollama_ok, self._ollama_message = True, f"Verbunden · {settings.OLLAMA_MODEL} bereit"
+                else:
+                    self._ollama_ok, self._ollama_message = True, "Verbunden · Modell fehlt"
             else:
-                self._set_ollama(False, f"HTTP {r.status_code}")
-        except Exception as exc:
-            self._set_ollama(False, f"Fehler: {type(exc).__name__}")
+                self._ollama_ok, self._ollama_message = False, f"HTTP {r.status_code}"
+        except: self._ollama_ok, self._ollama_message = False, "Offline"
+        self.ollamaStatusChanged.emit()
 
     @Slot()
-    def refreshOllamaStatus(self) -> None:
-        self._check_ollama()
+    def refreshOllamaStatus(self): self._check_ollama_async()
 
     @Slot(str)
-    def sendMessage(self, text: str) -> None:
+    def sendMessage(self, text):
         text = text.strip()
-        if not text or self._thread is not None:
-            return
-
-        self._db.insert_returning_id(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)",
-            (self._conversation_id, text),
-        )
+        if not text or self._thread is not None: return
+        self._db.insert_returning_id("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)", (self._conversation_id, text))
         self._history.append({"role": "user", "content": text})
         self.historyChanged.emit()
         self._set_state("thinking")
 
-        messages = self._cm.build_messages(self._history)
-
         from core.tool_manager import ToolManager
-        tm = ToolManager()
-        worker = ai_engine.ChatWorker(messages, settings.OLLAMA_MODEL, tools=tm.get_tools_definition())
-        
-        # WICHTIG: Worker ZUERST zuweisen, damit respondToConfirmation darauf zugreifen kann
+        worker = ai_engine.ChatWorker(self._cm.build_messages(self._history), settings.OLLAMA_MODEL, tools=ToolManager().get_tools_definition())
         self._worker = worker
         
         worker.chunk.connect(self.responseChunk)
         worker.finished.connect(self._on_worker_finished)
         worker.failed.connect(self._on_worker_failed)
+        
+        # HIER IST DIE KORREKTE VERBINDUNG:
         worker.confirmRequired.connect(self._on_confirm_required)
+        worker.confirmCancelled.connect(self.confirmCancelled.emit)
         worker.systemMessage.connect(self.systemMessageAdded.emit)
 
-        thread = threading.Thread(target=worker.run, daemon=True)
-        self._thread = thread
-        thread.start()
+        self._thread = threading.Thread(target=worker.run, daemon=True)
+        self._thread.start()
 
     @Slot()
-    def startListening(self):
-        self._voice.start_recording()
-
+    def startListening(self): self._voice.start_recording()
     @Slot()
-    def stopListening(self):
-        self._voice.stop_recording()
+    def stopListening(self): self._voice.stop_recording()
 
-    def _on_listening_changed(self, is_listening: bool):
+    def _on_listening_changed(self, is_listening):
         self._is_listening = is_listening
         self.systemStatsChanged.emit()
 
     @Slot(bool)
-    def respondToConfirmation(self, confirmed: bool) -> None:
-        if self._worker:
-            self._worker.set_confirmation(confirmed)
+    def respondToConfirmation(self, confirmed):
+        if self._worker: self._worker.set_confirmation(confirmed)
 
+    # HIER IST DIE METHODE (Sie fehlte vorher):
     def _on_confirm_required(self, tool_name: str, arg: str) -> None:
-        # Sendet das Signal an das QML (main.qml) um das Popup zu öffnen
         self.confirmRequested.emit(arg)
 
     @Slot()
-    def clearHistory(self) -> None:
+    def clearHistory(self):
         new_id = self._db.insert_returning_id("INSERT INTO conversations DEFAULT VALUES")
         self._db.set_setting("current_conversation_id", str(new_id))
         self._conversation_id = new_id
@@ -209,128 +166,77 @@ class Backend(QObject):
         self.historyReloaded.emit()
 
     @Slot(result="QVariantList")
-    def getCurrentMessages(self) -> list:
-        rows = self._db.query(
-            "SELECT role, content, created_at FROM messages "
-            "WHERE conversation_id = ? AND role IN ('user', 'assistant') "
-            "ORDER BY id ASC",
-            (self._conversation_id,),
-        )
-        out = []
-        for r in rows:
-            created = str(r["created_at"])
-            time_part = created[11:16] if len(created) >= 16 else ""
-            out.append({"role": r["role"], "content": r["content"], "time": time_part})
-        return out
+    def getCurrentMessages(self):
+        rows = self._db.query("SELECT role, content, created_at FROM messages WHERE conversation_id = ? AND role IN ('user', 'assistant') ORDER BY id ASC", (self._conversation_id,))
+        return [{"role": r["role"], "content": r["content"], "time": str(r["created_at"])[11:16]} for r in rows]
 
-    def _on_worker_finished(self, full: str) -> None:
+    def _on_worker_finished(self, full):
         self._history.append({"role": "assistant", "content": full})
-        self._db.insert_returning_id(
-            "INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', ?)",
-            (self._conversation_id, full),
-        )
+        self._db.insert_returning_id("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', ?)", (self._conversation_id, full))
         self.historyChanged.emit()
         self._set_state("idle")
         self.responseFinished.emit(full)
         self._thread = None
         self._worker = None
-        
-        if full.strip():
-            self._tts.speak(full)
-        
+        if full.strip(): self._tts.speak(full)
         self._maybe_extract_memories()
 
-    def _on_worker_failed(self, error: str) -> None:
+    def _on_worker_failed(self, error):
         self._set_state("error")
         self.responseError.emit(error)
         self._thread = None
         self._worker = None
         QTimer.singleShot(4000, lambda: self._set_state("idle"))
 
-    def _maybe_extract_memories(self) -> None:
-        if not settings.MEMORY_EXTRACTION_ENABLED:
-            return
-        if len(self._history) < 2:
-            return
-        last_user = self._history[-2]
-        last_assistant = self._history[-1]
-        if last_user["role"] != "user" or last_assistant["role"] != "assistant":
-            return
-        if len(last_user["content"]) < settings.MEMORY_MIN_USER_LEN:
-            return
-
-        exchange = f"Nutzer: {last_user['content']}\nAssistent: {last_assistant['content'][:800]}"
-        known = self._mm.all_contents()
-
-        extractor = MemoryExtractor(exchange, known, settings.OLLAMA_MODEL)
+    def _maybe_extract_memories(self):
+        if not settings.MEMORY_EXTRACTION_ENABLED or len(self._history) < 2: return
+        u, a = self._history[-2], self._history[-1]
+        if u["role"] != "user" or a["role"] != "assistant" or len(u["content"]) < settings.MEMORY_MIN_USER_LEN: return
+        extractor = MemoryExtractor(f"Nutzer: {u['content']}\nAssistent: {a['content'][:800]}", self._mm.all_contents(), settings.OLLAMA_MODEL)
         extractor.extracted.connect(self._on_memories_extracted)
-        extractor.failed.connect(lambda _e: None)
+        threading.Thread(target=extractor.run, daemon=True).start()
 
-        t = threading.Thread(target=extractor.run, daemon=True)
-        self._extractor_thread = t
-        t.start()
-
-    def _on_memories_extracted(self, items: list) -> None:
+    def _on_memories_extracted(self, items):
         added = False
         for item in items:
-            result = self._mm.add(item["category"], item["content"], source="auto")
-            if result:
+            if self._mm.add(item["category"], item["content"], source="auto"):
                 added = True
                 self.memoryAdded.emit(item["content"])
-        if added:
-            self.memoryChanged.emit()
+        if added: self.memoryChanged.emit()
 
     @Slot(int, str)
-    def updateMemory(self, mem_id: int, content: str) -> None:
-        if self._mm.update(mem_id, content):
-            self.memoryChanged.emit()
-
+    def updateMemory(self, mem_id, content):
+        if self._mm.update(mem_id, content): self.memoryChanged.emit()
     @Slot(int)
-    def deleteMemory(self, mem_id: int) -> None:
-        if self._mm.delete(mem_id):
-            self.memoryChanged.emit()
-
+    def deleteMemory(self, mem_id):
+        if self._mm.delete(mem_id): self.memoryChanged.emit()
+    
     @Slot(result=str)
-    def getHomeDirectory(self) -> str:
-        import os
-        return os.path.expanduser("~").replace("\\", "/")
-
+    def getHomeDirectory(self): return os.path.expanduser("~").replace("\\", "/")
     @Slot(str, result="QVariantList")
-    def listDirectory(self, path: str) -> list:
-        return FileManager.list_directory(path)
+    def listDirectory(self, path): return FileManager.list_directory(path)
 
     @Property(str, notify=stateChanged)
     def state(self): return self._state
-
     @Property(bool, notify=ollamaStatusChanged)
     def ollamaOk(self): return self._ollama_ok
-
     @Property(str, notify=ollamaStatusChanged)
     def ollamaMessage(self): return self._ollama_message
-
     @Property(float, notify=systemStatsChanged)
     def cpuPercent(self): return self._cpu
-
     @Property(float, notify=systemStatsChanged)
     def ramPercent(self): return self._ram
-
     @Property(float, notify=systemStatsChanged)
     def gpuPercent(self): return self._gpu
-
     @Property(bool, notify=systemStatsChanged)
     def isListening(self): return self._is_listening
-
     @Property(str, notify=timeChanged)
     def currentTime(self): return datetime.now().strftime("%H:%M:%S")
-
     @Property(str, notify=timeChanged)
     def currentDate(self): return datetime.now().strftime("%A · %d.%m.%Y")
-
     @Property(str, constant=True)
     def modelName(self): return settings.OLLAMA_MODEL
-
     @Property("QVariantList", notify=memoryChanged)
     def memories(self): return self._mm.list_all()
-
     @Property(int, notify=memoryChanged)
     def memoryCount(self): return len(self._mm.list_all())

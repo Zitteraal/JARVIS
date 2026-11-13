@@ -35,8 +35,19 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             ColumnLayout {
-                Text { text: "Memory Banks"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
-                Text { text: backend.memoryCount + " permanent memories extracted from conversations."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 14 }
+                Text { 
+                    text: "Memory Banks"
+                    color: theme.text
+                    font.family: theme.fontMain
+                    font.pixelSize: 24
+                    font.weight: Font.DemiBold 
+                }
+                Text { 
+                    text: backend.memoryCount + " permanent memories extracted from conversations."
+                    color: theme.textDim
+                    font.family: theme.fontMain
+                    font.pixelSize: 14 
+                }
             }
             Item { Layout.fillWidth: true }
         }
@@ -92,8 +103,21 @@ Item {
             ColumnLayout {
                 anchors.centerIn: parent
                 visible: root.visibleMemories.length === 0
-                Text { text: "No memories found."; color: theme.textFaint; font.family: theme.fontMain; font.pixelSize: 16; Layout.alignment: Qt.AlignHCenter }
-                Text { text: "Tell EVOX something about yourself."; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 13; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 8 }
+                Text { 
+                    text: "No memories found."
+                    color: theme.textFaint
+                    font.family: theme.fontMain
+                    font.pixelSize: 16
+                    Layout.alignment: Qt.AlignHCenter 
+                }
+                Text { 
+                    text: "Tell EVOX something about yourself."
+                    color: theme.textDim
+                    font.family: theme.fontMain
+                    font.pixelSize: 13
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.topMargin: 8 
+                }
             }
 
             ListView {
@@ -131,7 +155,7 @@ Item {
                                 height: 20
                                 radius: 3
                                 color:  root.categoryColor(modelData.category)
-                                opacity: 0.15 // <--- FIX: Kein Qt.rgba mehr, sondern Opacity
+                                opacity: 0.15 
                                 border.color: root.categoryColor(modelData.category)
                                 border.width: 1
                                 Text {
@@ -144,8 +168,18 @@ Item {
                                     font.weight: Font.Bold
                                 }
                             }
-                            Text { text: modelData.source === "auto" ? "auto-extracted" : "manual"; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 10 }
-                            Text { text: modelData.created_at; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 10 }
+                            Text { 
+                                text: modelData.source === "auto" ? "auto-extracted" : "manual"
+                                color: theme.textFaint
+                                font.family: theme.fontMono
+                                font.pixelSize: 10 
+                            }
+                            Text { 
+                                text: modelData.created_at
+                                color: theme.textFaint
+                                font.family: theme.fontMono
+                                font.pixelSize: 10 
+                            }
                             Item { Layout.fillWidth: true }
 
                             RowLayout {

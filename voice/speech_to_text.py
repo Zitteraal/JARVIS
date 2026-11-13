@@ -1,3 +1,5 @@
+import os
+os.environ["HF_HUB_OFFLINE"] = "1" # <--- Zwingt Whisper in den Offline-Modus
 import threading
 import numpy as np
 import sounddevice as sd

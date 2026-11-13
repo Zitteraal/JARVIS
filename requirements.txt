@@ -12,3 +12,4 @@ pyautogui
 pywinauto
 pillow
 piper-tts
+duckduckgo-search
