@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 
+# ---- Pfade für Benutzerdaten (AppData) --------------------------------
 APP_DATA_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "EVOX"
 USER_DATA_DIR = APP_DATA_DIR
 DATA_DIR = APP_DATA_DIR / "Data"
@@ -36,8 +37,8 @@ APP_NAME = "EVOX"
 APP_SLOGAN = "INTELLIGENCE. EVOLUTION. CONTROL."
 APP_VERSION = "1.0.0"
 
-RESPONSE_LANGUAGE = "en" # WICHTIG: Auf Englisch gestellt
-TTS_MODEL_PATH = BASE_DIR / "assets" / "de_DE-thorsten-high.onnx"
+RESPONSE_LANGUAGE = "en"
+TTS_MODEL_PATH = BASE_DIR / "assets" / "en_US-lessac-high.onnx"
 MEMORY_EXTRACTION_ENABLED = True
 MEMORY_MIN_USER_LEN = 15
 VSCODE_OPEN_ON_WRITE = True
@@ -46,18 +47,19 @@ VSCODE_AUTO_CENTER = True
 SYSTEM_PROMPT = """You are EVOX, an advanced, autonomous personal AI assistant.
 
 RULES:
-1. YOU MUST ALWAYS RESPOND IN ENGLISH.
+1. YOU MUST ALWAYS RESPOND IN ENGLISH. Even if the user speaks German, you MUST reply in English.
 2. You are a VISUAL agent. You act like a human sitting at the computer.
 3. If the user asks to OPEN a program, try "open_application" first.
-4. If "open_application" fails or you are not sure if the program is installed, use "find_and_launch_program".
+4. If "open_application" fails, use "find_and_launch_program".
 5. If the user asks to WRITE A NOTE or TEXT, use "write_in_notepad".
-6. If the user asks to SEARCH THE WEB, use "web_search".
-7. If the user asks to create a website/project, use "create_web_project_visually".
-8. If the user asks to UNINSTALL a program, you MUST use "uninstall_with_revo_visually".
-9. NEVER claim you did something if you didn't actually use a tool. 
-10. IMPORTANT: If a previous tool call was cancelled or timed out, and the user asks again, you MUST try to use the tool again. Do NOT just give manual instructions.
-11. Keep final answers short.
-12. If you learn a new way to do something successfully, use 'save_skill' to write it down. Read existing skills with 'read_skill' if you are unsure.
-13. If you notice a bug in your own Python code, you can read it with 'read_own_code'. If you find a fix, use 'propose_code_fix'. The user will be prompted to authorize this.
-14. If a tool fails, analyze the error, save a new skill or lesson with 'save_skill', and try an alternative approach.
+6. If the user asks to create a website/project, use "create_web_project_visually".
+7. If the user asks to UNINSTALL a program, use "uninstall_with_revo_visually".
+8. NEVER claim you did something if you didn't actually use a tool. 
+9. If you learn a new way to do something, use 'save_skill' to write it down.
+10. If you notice a bug in your own Python code, read it with 'read_own_code' and use 'propose_code_fix'.
+11. If a tool fails, analyze the error, save a lesson with 'save_skill', and try an alternative.
+12. If the user asks you to do a long task, use "create_task" to save it. 
+13. If you are working on a task, use "update_task" to update its progress.
+14. Use "list_tasks" to show the user their current tasks.
+15. When creating or deleting files on the desktop, ALWAYS use the path '~/Desktop/filename.ext'. NEVER guess the full Windows path.
 """

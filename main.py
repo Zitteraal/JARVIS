@@ -2,6 +2,7 @@ import sys
 import os
 import ctypes
 import logging
+import threading
 from pathlib import Path
 
 from PySide6.QtGui import QGuiApplication, QIcon
@@ -11,15 +12,30 @@ from PySide6.QtCore import QUrl, QSharedMemory
 from config import settings
 from core.logging_setup import setup_logging
 
-log = logging.getLogger("evox.main")
+log = logging.getLogger("EVOX.MAIN")
+_IS_SHUTTING_DOWN = False
 
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
+def handle_uncaught_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    log.critical("EVOX ist unerwartet abgestürzt!", exc_info=(exc_type, exc_value, exc_traceback))
+
+def handle_thread_exception(args):
+    log.critical(
+        f"Absturz im Hintergrund-Thread '{args.thread.name if args.thread else 'Unknown'}':",
+        exc_info=(args.exc_type, args.exc_value, args.exc_traceback)
+    )
+
+sys.excepthook = handle_uncaught_exception
+threading.excepthook = handle_thread_exception
 
 def handle_qml_warnings(warnings):
+    global _IS_SHUTTING_DOWN
+    # Wenn EVOX gerade beendet wird, ignorieren wir die Abschalt-Warnungen von Qt
+    if _IS_SHUTTING_DOWN:
+        return
+        
     for w in warnings:
         log.warning("QML: %s", w.toString())
 
@@ -27,7 +43,7 @@ def main() -> int:
     log_file = setup_logging()
     log.info("EVOX %s startet (Programm: %s)", settings.APP_VERSION, settings.BASE_DIR)
 
-    # 1. SINGLE INSTANCE CHECK (Muss VOR dem Admin-Check passieren!)
+    # 1. SINGLE INSTANCE CHECK
     shared_mem = QSharedMemory("EVOX_SingleInstance_Lock")
     if shared_mem.attach():
         log.warning("EVOX läuft bereits. Beende diesen Startversuch.")
@@ -36,12 +52,7 @@ def main() -> int:
         log.error("Konnte SharedMemory nicht erstellen.")
         return 1
 
-    # 2. ADMIN CHECK
-    if not is_admin():
-        print("Fordere Administratorrechte an...")
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
-        sys.exit(0)
-
+    # 2. WINDOWS APP ID
     try:
         myappid = "EVOX.PersonalIntelligenceWorkspace"
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
@@ -62,6 +73,13 @@ def main() -> int:
 
     from interface.backend import Backend
     backend = Backend()
+    app.backend = backend
+
+    # --- DISCORD RICH PRESENCE STARTEN ---
+    from core.discord_presence import DiscordPresence
+    discord = DiscordPresence(client_id="1570908710396633199", logo_key="evox_logo")
+    discord.start()
+    # --- ENDE DISCORD ---
 
     engine = QQmlApplicationEngine()
     engine.warnings.connect(handle_qml_warnings)
@@ -76,7 +94,19 @@ def main() -> int:
         log.critical("QML konnte nicht geladen werden.")
         return -1
 
-    return app.exec()
+    def on_quit():
+        global _IS_SHUTTING_DOWN
+        _IS_SHUTTING_DOWN = True
+        log.info("EVOX wird vom Benutzer geschlossen...")
+        log.info("EVOX-Prozess vollständig beendet.")
+    
+    app.aboutToQuit.connect(on_quit)
+
+    # Die App läuft, bis sie geschlossen wird
+    exit_code = app.exec()
+    
+    # Wir lassen Python das Aufräumen übernehmen.
+    return exit_code
 
 if __name__ == "__main__":
     sys.exit(main())

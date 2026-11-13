@@ -28,7 +28,6 @@ Window {
         anchors.fill: parent
         spacing: 0
 
-        // LEFT SIDEBAR
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: 220
@@ -69,7 +68,6 @@ Window {
             }
         }
 
-        // MAIN WORKSPACE
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -104,7 +102,6 @@ Window {
                     
                     Item { Layout.fillWidth: true }
                     
-                    // ONLINE / OFFLINE TOGGLE (NEU)
                     Rectangle {
                         width: 100; height: 24; radius: theme.radiusSm
                         color: backend.isOnline ? theme.bgSurface : theme.bg
@@ -146,7 +143,6 @@ Window {
         }
     }
 
-    // SICHERHEITS-POPUP
     Popup {
         id: confirmPopup
         anchors.centerIn: parent
@@ -191,7 +187,6 @@ Window {
         }
     }
 
-    // COMMAND CENTER
     Popup {
         id: commandCenterPopup
         anchors.centerIn: parent; width: 600; height: 400; modal: true; focus: true
@@ -244,24 +239,66 @@ Window {
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 32; spacing: 24
                 Text { text: "Good evening. What are we working on?"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
+                
                 RowLayout {
                     Layout.fillWidth: true; spacing: 16
                     ActionCard { cardTitle: "New Project"; cardDesc: "Start a new codebase"; cardIcon: "＋" }
                     ActionCard { cardTitle: "System Scan"; cardDesc: "Analyze PC performance"; cardIcon: "⚙" }
                     ActionCard { cardTitle: "Resume Task"; cardDesc: "Continue previous work"; cardIcon: "▶" }
                 }
+
                 RowLayout {
                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 24
+                    
+                    // AKTIVE AUFGABEN
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: true
                         color: theme.bgSurface; radius: theme.radius; border.color: theme.border; border.width: 1
                         ColumnLayout {
                             anchors.fill: parent; anchors.margins: 16
                             Text { text: "ACTIVE TASKS"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1 }
-                            Text { text: "No tasks currently running."; color: theme.textFaint; font.family: theme.fontMain; font.pixelSize: 13; Layout.topMargin: 8 }
-                            Item { Layout.fillHeight: true }
+                            
+                            ListView {
+                                id: taskList
+                                Layout.fillWidth: true; Layout.fillHeight: true
+                                Layout.topMargin: 8
+                                clip: true
+                                spacing: 8
+                                model: backend.activeTasks
+                                
+                                delegate: Rectangle {
+                                    width: taskList.width
+                                    height: 50
+                                    color: theme.bg
+                                    radius: theme.radiusSm
+                                    border.color: theme.border
+                                    
+                                    Column {
+                                        anchors.fill: parent; anchors.margins: 8
+                                        RowLayout {
+                                            width: parent.width
+                                            Text { text: modelData.title; color: theme.text; font.family: theme.fontMain; font.pixelSize: 13; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                                            Text { text: modelData.status.toUpperCase(); color: theme.accent; font.family: theme.fontMono; font.pixelSize: 9; font.weight: Font.Bold }
+                                        }
+                                        Rectangle {
+                                            width: parent.width; height: 4; radius: 2; color: theme.border
+                                            Rectangle {
+                                                width: parent.width * (modelData.progress / 100)
+                                                height: parent.height; radius: 2; color: theme.accent
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Text { 
+                                visible: backend.activeTasks.length === 0
+                                text: "No tasks currently running."; color: theme.textFaint; font.family: theme.fontMain; font.pixelSize: 13; Layout.topMargin: 8 
+                            }
                         }
                     }
+                    
+                    // LETZTE AKTIVITÄTEN
                     Rectangle {
                         Layout.fillWidth: true; Layout.fillHeight: true
                         color: theme.bgSurface; radius: theme.radius; border.color: theme.border; border.width: 1

@@ -11,6 +11,7 @@ from core.context_manager import ContextManager
 from memory.database import Database
 from memory.memory_manager import MemoryManager
 from memory.extractor import MemoryExtractor
+from core.task_manager import TaskManager
 from voice.text_to_speech import TextToSpeech
 from voice.speech_to_text import VoiceAssistant
 from system_administration.file_manager import FileManager
@@ -34,6 +35,7 @@ class Backend(QObject):
     systemMessageAdded = Signal(str)
     textRecognized = Signal(str)
     onlineModeChanged = Signal(bool)
+    tasksChanged = Signal()
 
     def __init__(self):
         super().__init__()
@@ -41,12 +43,13 @@ class Backend(QObject):
         self._db = Database()
         self._mm = MemoryManager(self._db)
         self._cm = ContextManager(self._mm)
+        self._tm = TaskManager(self._db)
         self._tts = TextToSpeech()
         self._voice = VoiceAssistant()
         self._voice.transcriptionReady.connect(self.textRecognized.emit) 
         self._voice.listeningChanged.connect(self._on_listening_changed)
         self._is_listening = False
-        self._is_online = False # STANDARD: OFFLINE
+        self._is_online = False 
 
         self._conversation_id = self._ensure_active_conversation()
         self._history = self._load_history()
@@ -63,7 +66,6 @@ class Backend(QObject):
             self._has_gpu = True
         except Exception: 
             self._has_gpu = False
-            log.warning("NVML (GPU Stats) konnte nicht initialisiert werden.")
 
         self._stats_timer = QTimer(self)
         self._stats_timer.timeout.connect(self._tick)
@@ -72,7 +74,6 @@ class Backend(QObject):
         self._ollama_timer = QTimer(self)
         self._ollama_timer.timeout.connect(self._check_ollama_async)
         self._ollama_timer.start(30000)
-        log.info("Ollama-Check im Hintergrund gestartet (alle 30s).")
         self._check_ollama_async()
 
     def _ensure_active_conversation(self):
@@ -116,13 +117,10 @@ class Backend(QObject):
                     log.success(f"Ollama verbunden. Modell '{settings.OLLAMA_MODEL}' ist bereit.")
                 else:
                     self._ollama_ok, self._ollama_message = True, "Verbunden · Modell fehlt"
-                    log.warning(f"Ollama verbunden, aber Modell '{settings.OLLAMA_MODEL}' fehlt.")
             else:
                 self._ollama_ok, self._ollama_message = False, f"HTTP {r.status_code}"
-                log.error(f"Ollama HTTP Fehler: {r.status_code}")
-        except Exception as e:
+        except: 
             self._ollama_ok, self._ollama_message = False, "Offline"
-            log.error(f"Ollama Verbindung fehlgeschlagen: {e}")
         self.ollamaStatusChanged.emit()
 
     @Slot()
@@ -147,8 +145,7 @@ class Backend(QObject):
         self._history.append({"role": "user", "content": text})
         self.historyChanged.emit()
         self._set_state("thinking")
-        log.debug("Status auf 'thinking' gesetzt.")
-
+        
         from core.tool_manager import ToolManager
         tm = ToolManager()
         tools = tm.get_tools_definition(is_online=self._is_online)
@@ -208,8 +205,8 @@ class Backend(QObject):
         self._thread = None
         self._worker = None
         if full.strip(): 
-            log.info("Sprachausgabe (TTS) gestartet.")
             self._tts.speak(full)
+        self.tasksChanged.emit() # UI-Update triggern, falls Task geändert
         self._maybe_extract_memories()
 
     def _on_worker_failed(self, error):
@@ -225,7 +222,6 @@ class Backend(QObject):
         u, a = self._history[-2], self._history[-1]
         if u["role"] != "user" or a["role"] != "assistant" or len(u["content"]) < settings.MEMORY_MIN_USER_LEN: return
         
-        log.debug("Starte Gedächtnis-Extraktion im Hintergrund...")
         extractor = MemoryExtractor(f"Nutzer: {u['content']}\nAssistent: {a['content'][:800]}", self._mm.all_contents(), settings.OLLAMA_MODEL)
         extractor.extracted.connect(self._on_memories_extracted)
         threading.Thread(target=extractor.run, daemon=True).start()
@@ -236,7 +232,6 @@ class Backend(QObject):
             if self._mm.add(item["category"], item["content"], source="auto"):
                 added = True
                 self.memoryAdded.emit(item["content"])
-                log.info(f"Neue Erinnerung gespeichert: [{item['category']}] {item['content']}")
         if added: self.memoryChanged.emit()
 
     @Slot(int, str)
@@ -279,3 +274,6 @@ class Backend(QObject):
     def memories(self): return self._mm.list_all()
     @Property(int, notify=memoryChanged)
     def memoryCount(self): return len(self._mm.list_all())
+    
+    @Property("QVariantList", notify=tasksChanged)
+    def activeTasks(self): return self._tm.get_active_tasks()   

@@ -3,6 +3,7 @@ from system_administration.disk_analyzer import DiskAnalyzer
 from system_administration.project_generator import ProjectGenerator
 from system_administration.file_manager import FileManager
 from computer_control.pc_control import PCControl
+from computer_control.system_tools import SystemTools
 from computer_control.ui_automation import UIAutomation
 from computer_control.admin_tools import AdminTools
 from computer_control.app_launcher import AppLauncher
@@ -11,10 +12,12 @@ from internet.web_search import WebSearch
 from core.tool_result import ToolResult
 from core.skill_manager import SkillManager
 from core.self_evolver import SelfEvolver
+from core.task_manager import TaskManager
+from memory.database import Database
 
 class ToolManager:
     def __init__(self):
-        pass
+        self._task_mgr = TaskManager(Database())
 
     def get_tools_definition(self, is_online: bool = False) -> list:
         tools = [
@@ -22,18 +25,33 @@ class ToolManager:
             {"type": "function", "function": {"name": "find_and_launch_program", "description": "Searches the PC to find an unknown program and launches it.", "parameters": {"type": "object", "properties": {"app_name": {"type": "string"}}, "required": ["app_name"]}}},
             {"type": "function", "function": {"name": "write_in_notepad", "description": "Opens Notepad, types text, and saves.", "parameters": {"type": "object", "properties": {"filename": {"type": "string"}, "text": {"type": "string"}}, "required": ["filename", "text"]}}},
             {"type": "function", "function": {"name": "create_web_project_visually", "description": "Creates a full web project.", "parameters": {"type": "object", "properties": {"project_name": {"type": "string"}}, "required": ["project_name"]}}},
-            {"type": "function", "function": {"name": "write_code_file", "description": "Writes code directly to a file and opens it in VS Code.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}, "code_content": {"type": "string"}}, "required": ["file_path", "code_content"]}}},
+            {"type": "function", "function": {"name": "write_code_file", "description": "Writes code to a file and opens it in VS Code.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}, "code_content": {"type": "string"}}, "required": ["file_path", "code_content"]}}},
             {"type": "function", "function": {"name": "uninstall_with_revo_visually", "description": "Starts Revo Uninstaller with Admin rights.", "parameters": {"type": "object", "properties": {"program_name": {"type": "string"}}, "required": ["program_name"]}}},
             {"type": "function", "function": {"name": "list_directory", "description": "Lists files.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
             {"type": "function", "function": {"name": "read_text_file", "description": "Reads a file.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}}, "required": ["file_path"]}}},
             {"type": "function", "function": {"name": "analyze_disk", "description": "Analyzes hard drives.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             
-            # --- EVOLUTION TOOLS ---
-            {"type": "function", "function": {"name": "save_skill", "description": "Saves a new learned skill or lesson as a markdown file.", "parameters": {"type": "object", "properties": {"skill_name": {"type": "string"}, "content": {"type": "string"}}, "required": ["skill_name", "content"]}}},
+            # System Tools
+            {"type": "function", "function": {"name": "control_volume", "description": "Controls the system volume (up, down, mute).", "parameters": {"type": "object", "properties": {"action": {"type": "string", "enum": ["up", "down", "mute"]}}, "required": ["action"]}}},
+            {"type": "function", "function": {"name": "lock_pc", "description": "Locks the Windows PC.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            {"type": "function", "function": {"name": "take_screenshot", "description": "Takes a screenshot of the current screen.", "parameters": {"type": "object", "properties": {}, "required": []}}},
+            
+            # File Management
+            {"type": "function", "function": {"name": "delete_file", "description": "Deletes a file or folder.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}}, "required": ["file_path"]}}},
+            {"type": "function", "function": {"name": "copy_file", "description": "Copies a file to a new destination.", "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "destination": {"type": "string"}}, "required": ["source", "destination"]}}},
+            {"type": "function", "function": {"name": "move_file", "description": "Moves a file to a new destination.", "parameters": {"type": "object", "properties": {"source": {"type": "string"}, "destination": {"type": "string"}}, "required": ["source", "destination"]}}},
+
+            # Evolution
+            {"type": "function", "function": {"name": "save_skill", "description": "Saves a new learned skill or lesson.", "parameters": {"type": "object", "properties": {"skill_name": {"type": "string"}, "content": {"type": "string"}}, "required": ["skill_name", "content"]}}},
             {"type": "function", "function": {"name": "read_skill", "description": "Reads a learned skill.", "parameters": {"type": "object", "properties": {"skill_name": {"type": "string"}}, "required": ["skill_name"]}}},
             {"type": "function", "function": {"name": "list_skills", "description": "Lists all learned skills.", "parameters": {"type": "object", "properties": {}, "required": []}}},
             {"type": "function", "function": {"name": "read_own_code", "description": "Reads EVOX's own Python source code.", "parameters": {"type": "object", "properties": {"filename": {"type": "string"}}, "required": ["filename"]}}},
-            {"type": "function", "function": {"name": "propose_code_fix", "description": "Proposes a fix to EVOX's own code in a safe Git branch.", "parameters": {"type": "object", "properties": {"filename": {"type": "string"}, "new_code": {"type": "string"}}, "required": ["filename", "new_code"]}}}
+            {"type": "function", "function": {"name": "propose_code_fix", "description": "Proposes a fix to EVOX's own code in a safe Git branch.", "parameters": {"type": "object", "properties": {"filename": {"type": "string"}, "new_code": {"type": "string"}}, "required": ["filename", "new_code"]}}},
+
+            # Tasks
+            {"type": "function", "function": {"name": "create_task", "description": "Creates a new background task.", "parameters": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}}, "required": ["title", "description"]}}},
+            {"type": "function", "function": {"name": "update_task", "description": "Updates the status and progress of a task.", "parameters": {"type": "object", "properties": {"task_id": {"type": "integer"}, "status": {"type": "string"}, "progress": {"type": "integer"}}, "required": ["task_id", "status"]}}},
+            {"type": "function", "function": {"name": "list_tasks", "description": "Lists all background tasks.", "parameters": {"type": "object", "properties": {}, "required": []}}}
         ]
         
         if is_online:
@@ -83,12 +101,28 @@ class ToolManager:
             elif tool_name == "read_text_file":
                 with open(arguments.get("file_path", ""), "r", encoding="utf-8") as f: return ToolResult.success(f.read())
             elif tool_name == "web_search":
-                return ToolResult.success(WebSearch.search(arguments.get("query", "")))
+                return WebSearch.search(arguments.get("query", ""))
             elif tool_name == "analyze_disk":
                 drives = DiskAnalyzer.get_drive_info()
                 return ToolResult.success("Drive analysis:\n" + "\n".join([f"- {d['drive']}: {d['free_gb']} GB free" for d in drives]))
             
-            # --- EVOLUTION HANDLERS ---
+            # System Tools
+            elif tool_name == "control_volume":
+                return SystemTools.control_volume(arguments.get("action", "up"))
+            elif tool_name == "lock_pc":
+                return SystemTools.lock_pc()
+            elif tool_name == "take_screenshot":
+                return SystemTools.take_screenshot()
+                
+            # File Management
+            elif tool_name == "delete_file":
+                return FileManager.delete_file(arguments.get("file_path", ""))
+            elif tool_name == "copy_file":
+                return FileManager.copy_file(arguments.get("source", ""), arguments.get("destination", ""))
+            elif tool_name == "move_file":
+                return FileManager.move_file(arguments.get("source", ""), arguments.get("destination", ""))
+
+            # Evolution
             elif tool_name == "save_skill":
                 return ToolResult.success(SkillManager.save_skill(arguments.get("skill_name", ""), arguments.get("content", "")))
             elif tool_name == "read_skill":
@@ -99,6 +133,14 @@ class ToolManager:
                 return ToolResult.success(SelfEvolver.read_own_code(arguments.get("filename", "")))
             elif tool_name == "propose_code_fix":
                 return ToolResult.success(SelfEvolver.propose_code_fix(arguments.get("filename", ""), arguments.get("new_code", "")), verified=False)
+
+            # Tasks
+            elif tool_name == "create_task":
+                return ToolResult.success(self._task_mgr.create_task(arguments.get("title", ""), arguments.get("description", "")))
+            elif tool_name == "update_task":
+                return ToolResult.success(self._task_mgr.update_task(arguments.get("task_id", 0), arguments.get("status", "running"), arguments.get("progress")))
+            elif tool_name == "list_tasks":
+                return ToolResult.success(self._task_mgr.list_all_tasks())
                 
             return ToolResult.failure(f"Tool '{tool_name}' is unknown.")
         except Exception as e:
