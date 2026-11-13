@@ -28,6 +28,7 @@ Window {
         anchors.fill: parent
         spacing: 0
 
+        // LEFT SIDEBAR
         Rectangle {
             Layout.fillHeight: true
             Layout.preferredWidth: 220
@@ -40,25 +41,8 @@ Window {
                 anchors.margins: 16
                 spacing: 4
 
-                Text {
-                    text: "E V O X"
-                    color: theme.text
-                    font.family: theme.fontMain
-                    font.pixelSize: 16
-                    font.weight: Font.Bold
-                    font.letterSpacing: 4
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.topMargin: 8
-                }
-                Text {
-                    text: "INTELLIGENCE. EVOLUTION. CONTROL."
-                    color: theme.accentDim
-                    font.family: theme.fontMono
-                    font.pixelSize: 7
-                    font.letterSpacing: 1
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.bottomMargin: 24
-                }
+                Text { text: "E V O X"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 16; font.weight: Font.Bold; font.letterSpacing: 4; Layout.alignment: Qt.AlignHCenter; Layout.topMargin: 8 }
+                Text { text: "INTELLIGENCE. EVOLUTION. CONTROL."; color: theme.accentDim; font.family: theme.fontMono; font.pixelSize: 7; font.letterSpacing: 1; Layout.alignment: Qt.AlignHCenter; Layout.bottomMargin: 24 }
 
                 Text { text: "WORKSPACE"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1; Layout.topMargin: 8; Layout.bottomMargin: 4 }
                 NavButton { buttonText: "Home"; active: appWindow.activeView === "home"; onClicked: appWindow.activeView = "home" }
@@ -85,6 +69,7 @@ Window {
             }
         }
 
+        // MAIN WORKSPACE
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -119,18 +104,29 @@ Window {
                     
                     Item { Layout.fillWidth: true }
                     
+                    // ONLINE / OFFLINE TOGGLE (NEU)
+                    Rectangle {
+                        width: 100; height: 24; radius: theme.radiusSm
+                        color: backend.isOnline ? theme.bgSurface : theme.bg
+                        border.color: backend.isOnline ? theme.accent : theme.border
+                        border.width: 1
+                        
+                        Text { 
+                            anchors.centerIn: parent
+                            text: backend.isOnline ? "ONLINE" : "OFFLINE"
+                            color: backend.isOnline ? theme.accent : theme.textDim
+                            font.family: theme.fontMono; font.pixelSize: 10; font.weight: Font.Bold
+                        }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: backend.toggleOnlineMode() }
+                    }
+
                     Rectangle {
                         width: 60; height: 24; radius: theme.radiusSm; color: theme.bgSurface; border.color: theme.border
                         Text { anchors.centerIn: parent; text: "Ctrl+K"; color: theme.textDim; font.family: theme.fontMono; font.pixelSize: 10 }
                         MouseArea { anchors.fill: parent; onClicked: commandCenterPopup.open() }
                     }
 
-                    Text {
-                        text: backend.currentTime
-                        color: theme.text
-                        font.family: theme.fontMono
-                        font.pixelSize: 12
-                    }
+                    Text { text: backend.currentTime; color: theme.text; font.family: theme.fontMono; font.pixelSize: 12 }
                 }
             }
 
@@ -150,87 +146,42 @@ Window {
         }
     }
 
+    // SICHERHEITS-POPUP
     Popup {
         id: confirmPopup
         anchors.centerIn: parent
-        width: 500
-        height: 260
+        width: 500; height: 260
         modal: true
         closePolicy: Popup.NoAutoClose
 
         Timer {
             id: countdownTimer
-            interval: 1000
-            repeat: true
-            running: confirmPopup.visible
+            interval: 1000; repeat: true; running: confirmPopup.visible
             onTriggered: {
-                if (appWindow.confirmCountdown > 0) {
-                    appWindow.confirmCountdown--
-                } else {
-                    confirmPopup.close()
-                    backend.respondToConfirmation(false)
-                }
+                if (appWindow.confirmCountdown > 0) appWindow.confirmCountdown--
+                else { confirmPopup.close(); backend.respondToConfirmation(false) }
             }
         }
 
-        background: Rectangle {
-            color: theme.bgSurface
-            radius: theme.radius
-            border.color: theme.danger
-            border.width: 1
-        }
+        background: Rectangle { color: theme.bgSurface; radius: theme.radius; border.color: theme.danger; border.width: 1 }
 
         ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 24
-            spacing: 16
-
-            Text {
-                text: "CRITICAL ACTION AUTHORIZATION"
-                color: theme.danger
-                font.family: theme.fontMain
-                font.pixelSize: 14
-                font.weight: Font.Bold
-                font.letterSpacing: 2
-                Layout.alignment: Qt.AlignHCenter
-            }
-
-            Text {
-                text: "Do you authorize EVOX to execute: '" + appWindow.pendingProgram + "'?"
-                color: theme.text
-                font.family: theme.fontMain
-                font.pixelSize: 15
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-                Layout.fillWidth: true
-            }
-
-            Text {
-                text: "Time remaining: " + appWindow.confirmCountdown + "s"
-                color: theme.warning
-                font.family: theme.fontMono
-                font.pixelSize: 13
-                Layout.alignment: Qt.AlignHCenter
-            }
-
+            anchors.fill: parent; anchors.margins: 24; spacing: 16
+            Text { text: "CRITICAL ACTION AUTHORIZATION"; color: theme.danger; font.family: theme.fontMain; font.pixelSize: 14; font.weight: Font.Bold; font.letterSpacing: 2; Layout.alignment: Qt.AlignHCenter }
+            Text { text: "Do you authorize EVOX to execute: '" + appWindow.pendingProgram + "'?"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 15; wrapMode: Text.Wrap; horizontalAlignment: Text.AlignHCenter; Layout.fillWidth: true }
+            Text { text: "Time remaining: " + appWindow.confirmCountdown + "s"; color: theme.warning; font.family: theme.fontMono; font.pixelSize: 13; Layout.alignment: Qt.AlignHCenter }
             Item { Layout.fillHeight: true }
-
             RowLayout {
-                Layout.fillWidth: true
-                spacing: 12
-
+                Layout.fillWidth: true; spacing: 12
                 Button {
-                    text: "DENY"
-                    Layout.fillWidth: true
+                    text: "DENY"; Layout.fillWidth: true
                     onClicked: { confirmPopup.close(); backend.respondToConfirmation(false); }
                     background: Rectangle { radius: theme.radiusSm; color: parent.down ? theme.bgNav : theme.bgSurface; border.color: theme.border; border.width: 1 }
                     contentItem: Text { text: parent.text; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 12; font.weight: Font.Bold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
                     implicitHeight: 40
                 }
-
                 Button {
-                    text: "AUTHORIZE"
-                    Layout.fillWidth: true
+                    text: "AUTHORIZE"; Layout.fillWidth: true
                     onClicked: { confirmPopup.close(); backend.respondToConfirmation(true); }
                     background: Rectangle { radius: theme.radiusSm; color: parent.down ? "#cc4b4b" : theme.danger; border.color: theme.danger; border.width: 1 }
                     contentItem: Text { text: parent.text; color: "#fff"; font.family: theme.fontMain; font.pixelSize: 12; font.weight: Font.Bold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
@@ -240,63 +191,34 @@ Window {
         }
     }
 
+    // COMMAND CENTER
     Popup {
         id: commandCenterPopup
-        anchors.centerIn: parent
-        width: 600
-        height: 400
-        modal: true
-        focus: true
+        anchors.centerIn: parent; width: 600; height: 400; modal: true; focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         
-        background: Rectangle {
-            color: theme.bgSurface
-            radius: theme.radius
-            border.color: theme.borderHi
-            border.width: 1
-            layer.enabled: true
-        }
+        background: Rectangle { color: theme.bgSurface; radius: theme.radius; border.color: theme.borderHi; border.width: 1; layer.enabled: true }
 
         ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 16
-            spacing: 12
-
+            anchors.fill: parent; anchors.margins: 16; spacing: 12
             Text { text: "COMMAND CENTER"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 10; font.weight: Font.Bold; font.letterSpacing: 1 }
-
             Rectangle {
-                Layout.fillWidth: true
-                height: 48
-                radius: theme.radiusSm
-                color: theme.bg
-                border.color: cmdInput.activeFocus ? theme.accent : theme.border
-                border.width: 1
-
+                Layout.fillWidth: true; height: 48; radius: theme.radiusSm; color: theme.bg; border.color: cmdInput.activeFocus ? theme.accent : theme.border; border.width: 1
                 TextArea {
-                    id: cmdInput
-                    anchors.fill: parent; anchors.margins: 12
+                    id: cmdInput; anchors.fill: parent; anchors.margins: 12
                     topPadding: 0; bottomPadding: 0; leftPadding: 0; rightPadding: 0
-                    placeholderText: "Type a command, ask a question, or search..."
-                    placeholderTextColor: theme.textFaint; color: theme.text
+                    placeholderText: "Type a command, ask a question, or search..."; placeholderTextColor: theme.textFaint; color: theme.text
                     font.family: theme.fontMain; font.pixelSize: 16; background: null
-                    
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Return) {
                             event.accepted = true
                             const text = cmdInput.text.trim()
-                            if (text !== "") {
-                                commandCenterPopup.close()
-                                appWindow.activeView = "assistant"
-                                backend.sendMessage(text)
-                                cmdInput.text = ""
-                            }
+                            if (text !== "") { commandCenterPopup.close(); appWindow.activeView = "assistant"; backend.sendMessage(text); cmdInput.text = "" }
                         }
                     }
                 }
             }
-            
             Text { text: "Quick Actions"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 11; font.weight: Font.Medium; Layout.topMargin: 8 }
-
             GridLayout {
                 Layout.fillWidth: true; columns: 2; rowSpacing: 8; columnSpacing: 8
                 Rectangle { 
@@ -315,20 +237,19 @@ Window {
         onOpened: cmdInput.forceActiveFocus()
     }
 
+    // --- HOME VIEW ---
     Component {
         id: homeView
         Item {
             ColumnLayout {
                 anchors.fill: parent; anchors.margins: 32; spacing: 24
                 Text { text: "Good evening. What are we working on?"; color: theme.text; font.family: theme.fontMain; font.pixelSize: 24; font.weight: Font.DemiBold }
-
                 RowLayout {
                     Layout.fillWidth: true; spacing: 16
                     ActionCard { cardTitle: "New Project"; cardDesc: "Start a new codebase"; cardIcon: "＋" }
                     ActionCard { cardTitle: "System Scan"; cardDesc: "Analyze PC performance"; cardIcon: "⚙" }
                     ActionCard { cardTitle: "Resume Task"; cardDesc: "Continue previous work"; cardIcon: "▶" }
                 }
-
                 RowLayout {
                     Layout.fillWidth: true; Layout.fillHeight: true; spacing: 24
                     Rectangle {
@@ -356,6 +277,7 @@ Window {
         }
     }
 
+    // --- ASSISTANT VIEW ---
     Component {
         id: assistantView
         Item {
@@ -370,37 +292,13 @@ Window {
             Item {
                 id: chatHeader
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right; height: 50
-                
-                Text {
-                    anchors.left: parent.left; anchors.leftMargin: 24; anchors.verticalCenter: parent.verticalCenter
-                    text: "Conversation History"
-                    color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 12; font.weight: Font.Medium
-                }
-                
+                Text { anchors.left: parent.left; anchors.leftMargin: 24; anchors.verticalCenter: parent.verticalCenter; text: "Conversation History"; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 12; font.weight: Font.Medium }
                 Button {
-                    anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter
-                    text: "CLEAR CHAT"
-                    onClicked: {
-                        chatModel.clear()
-                        backend.clearHistory()
-                    }
-                    background: Rectangle { 
-                        radius: theme.radiusSm
-                        color: parent.down ? theme.bgNav : theme.bgSurface
-                        border.color: theme.border
-                        border.width: 1 
-                    }
-                    contentItem: Text { 
-                        text: parent.text
-                        color: theme.textDim
-                        font.family: theme.fontMain
-                        font.pixelSize: 10
-                        font.weight: Font.Bold
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter 
-                    }
-                    implicitHeight: 28
-                    implicitWidth: 90
+                    anchors.right: parent.right; anchors.rightMargin: 24; anchors.verticalCenter: parent.verticalCenter; text: "CLEAR CHAT"
+                    onClicked: { chatModel.clear(); backend.clearHistory() }
+                    background: Rectangle { radius: theme.radiusSm; color: parent.down ? theme.bgNav : theme.bgSurface; border.color: theme.border; border.width: 1 }
+                    contentItem: Text { text: parent.text; color: theme.textDim; font.family: theme.fontMain; font.pixelSize: 10; font.weight: Font.Bold; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    implicitHeight: 28; implicitWidth: 90
                 }
             }
 
@@ -410,29 +308,17 @@ Window {
                 anchors.margins: 24; clip: true; spacing: 20; model: chatModel
                 ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
                 delegate: Item {
-                    width: chatList.width
-                    height: delegateCol.implicitHeight
+                    width: chatList.width; height: delegateCol.implicitHeight
                     Column {
-                        id: delegateCol
-                        width: parent.width
-                        spacing: 6
+                        id: delegateCol; width: parent.width; spacing: 6
                         Row {
                             spacing: 10
                             Text { text: model.role === "user" ? "You" : model.role === "assistant" ? "EVOX" : "System"; color: model.role === "user" ? theme.textDim : (model.role === "assistant" ? theme.accent : theme.warning); font.family: theme.fontMain; font.pixelSize: 13; font.weight: Font.Bold }
                             Text { text: model.time; color: theme.textFaint; font.family: theme.fontMono; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
                         }
-                        
                         TextEdit {
-                            width: parent.width
-                            text: model.text
-                            color: theme.text
-                            font.family: theme.fontMain
-                            font.pixelSize: 14
-                            wrapMode: TextEdit.Wrap
-                            readOnly: true
-                            selectByMouse: true
-                            textFormat: TextEdit.PlainText
-                            height: contentHeight
+                            width: parent.width; text: model.text; color: theme.text; font.family: theme.fontMain; font.pixelSize: 14
+                            wrapMode: TextEdit.Wrap; readOnly: true; selectByMouse: true; textFormat: TextEdit.PlainText; height: contentHeight
                         }
                     }
                 }
@@ -444,7 +330,6 @@ Window {
                 anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right; anchors.margins: 24; height: 52
                 Rectangle {
                     anchors.fill: parent; radius: theme.radius; color: theme.bgSurface; border.color: inputArea.activeFocus ? theme.accent : theme.border; border.width: 1
-                    
                     TextArea {
                         id: inputArea
                         anchors.left: parent.left; anchors.right: micButton.left; anchors.top: parent.top; anchors.bottom: parent.bottom
@@ -454,27 +339,17 @@ Window {
                         background: null; wrapMode: TextArea.Wrap; enabled: backend.state === "idle"
                         Keys.onPressed: (event) => { if (event.key === Qt.Key_Return && !(event.modifiers & Qt.ShiftModifier)) { event.accepted = true; sendMessage(); } }
                     }
-
                     Rectangle {
                         id: micButton
-                        anchors.right: sendButton.left
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.right: sendButton.left; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
                         width: 36; height: 36; radius: theme.radiusSm
-                        color: backend.isListening ? theme.danger : theme.bgNav
-                        border.color: backend.isListening ? theme.danger : theme.border
-                        border.width: 1
+                        color: backend.isListening ? theme.danger : theme.bgNav; border.color: backend.isListening ? theme.danger : theme.border; border.width: 1
                         Text { anchors.centerIn: parent; text: "🎤"; font.pixelSize: 16; opacity: backend.state === "idle" ? 1.0 : 0.5 }
                         MouseArea { 
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            enabled: backend.state === "idle"
-                            onClicked: {
-                                if (backend.isListening) { backend.stopListening() } else { backend.startListening() }
-                            }
+                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor; enabled: backend.state === "idle"
+                            onClicked: { if (backend.isListening) { backend.stopListening() } else { backend.startListening() } }
                         }
                     }
-
                     Rectangle {
                         id: sendButton
                         anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
@@ -505,6 +380,7 @@ Window {
         }
     }
 
+    // --- PROJECTS VIEW ---
     Component {
         id: projectsView
         Item {
@@ -525,16 +401,13 @@ Window {
         }
     }
 
-    Component {
-        id: memoryView
-        MemoryView { }
-    }
+    // --- MEMORY VIEW ---
+    Component { id: memoryView; MemoryView { } }
 
-    Component {
-        id: filesView
-        FileWorkspace { }
-    }
+    // --- FILES VIEW ---
+    Component { id: filesView; FileWorkspace { } }
 
+    // --- SYSTEM ANALYSIS VIEW ---
     Component {
         id: systemView
         Item {
@@ -584,13 +457,7 @@ Window {
 
     Connections {
         target: backend
-        function onConfirmRequested(programName) {
-            appWindow.pendingProgram = programName
-            appWindow.confirmCountdown = 120
-            confirmPopup.open()
-        }
-        function onConfirmCancelled() {
-            confirmPopup.close()
-        }
+        function onConfirmRequested(programName) { appWindow.pendingProgram = programName; appWindow.confirmCountdown = 120; confirmPopup.open() }
+        function onConfirmCancelled() { confirmPopup.close() }
     }
 }

@@ -1,60 +1,58 @@
-"""
-Zentrales Logging: Datei (rotierend) + Konsole, falls vorhanden.
-Unbehandelte Fehler (auch aus Threads) landen ebenfalls im Log.
-"""
-from __future__ import annotations
-
 import logging
+import os
 import sys
-import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from config import settings
+# 1. Custom SUCCESS Level erstellen (liegt zwischen INFO und WARNING)
+SUCCESS_LEVEL_NUM = 25
+logging.addLevelName(SUCCESS_LEVEL_NUM, "SUCCESS")
 
-_configured = False
+def success(self, message, *args, **kws):
+    if self.isEnabledFor(SUCCESS_LEVEL_NUM):
+        self._log(SUCCESS_LEVEL_NUM, message, args, **kws)
 
+# Fügt die .success() Methode zu jedem Logger hinzu
+logging.Logger.success = success
 
-def setup_logging(level: int = logging.INFO) -> Path:
-    """Richtet das Logging einmalig ein und gibt den Pfad der Logdatei zurück."""
-    global _configured
-    log_file = settings.LOGS_DIR / "evox.log"
-    if _configured:
+def setup_logging() -> Path:
+    """Richtet das Logging ein und gibt den Pfad zur Logdatei zurück."""
+    
+    # Log-Verzeichnis im AppData-Ordner
+    log_dir = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "EVOX" / "Logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "evox.log"
+
+    # Format: [13:42:01] [INFO] [EVOX] Nachricht
+    log_format = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+    date_format = "%H:%M:%S"
+    formatter = logging.Formatter(log_format, datefmt=date_format)
+
+    # Root Logger konfigurieren
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG) 
+
+    # Verhindere doppelte Handler bei mehrfachem Aufruf
+    if root_logger.handlers:
         return log_file
 
-    settings.LOGS_DIR.mkdir(parents=True, exist_ok=True)
-    formatter = logging.Formatter("%(asctime)s %(levelname)-7s %(name)s: %(message)s")
+    # 1. Console Handler (Live-Ausgabe im Terminal)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
 
-    root = logging.getLogger()
-    root.setLevel(level)
-
-    file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=5, encoding="utf-8")
+    # 2. File Handler (Speichert in evox.log mit Rotation)
+    file_handler = RotatingFileHandler(
+        log_file, maxBytes=5*1024*1024, backupCount=5, encoding="utf-8"
+    )
+    file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
-    root.addHandler(file_handler)
+    root_logger.addHandler(file_handler)
 
-    # Ohne Konsole (z. B. EXE ohne Fenster) ist sys.stderr None.
-    if sys.stderr is not None:
-        console = logging.StreamHandler(sys.stderr)
-        console.setFormatter(formatter)
-        root.addHandler(console)
+    # Externe Bibliotheken etwas ruhiger stellen
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("pywinauto").setLevel(logging.WARNING)
 
-    logging.captureWarnings(True)
-
-    def _log_uncaught(exc_type, exc, tb):
-        if issubclass(exc_type, KeyboardInterrupt):
-            sys.__excepthook__(exc_type, exc, tb)
-            return
-        logging.getLogger("evox.uncaught").critical("Unhandled exception", exc_info=(exc_type, exc, tb))
-
-    def _log_thread_exception(args):
-        logging.getLogger("evox.uncaught").critical(
-            "Unhandled exception in thread %s",
-            getattr(args.thread, "name", "?"),
-            exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
-        )
-
-    sys.excepthook = _log_uncaught
-    threading.excepthook = _log_thread_exception
-
-    _configured = True
     return log_file

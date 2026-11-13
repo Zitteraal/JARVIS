@@ -1,0 +1,1 @@
+If 'find_and_launch_program' fails, the program is likely not installed. Check installation status or try alternative names.

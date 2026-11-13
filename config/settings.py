@@ -57,4 +57,7 @@ RULES:
 9. NEVER claim you did something if you didn't actually use a tool. 
 10. IMPORTANT: If a previous tool call was cancelled or timed out, and the user asks again, you MUST try to use the tool again. Do NOT just give manual instructions.
 11. Keep final answers short.
+12. If you learn a new way to do something successfully, use 'save_skill' to write it down. Read existing skills with 'read_skill' if you are unsure.
+13. If you notice a bug in your own Python code, you can read it with 'read_own_code'. If you find a fix, use 'propose_code_fix'. The user will be prompted to authorize this.
+14. If a tool fails, analyze the error, save a new skill or lesson with 'save_skill', and try an alternative approach.
 """

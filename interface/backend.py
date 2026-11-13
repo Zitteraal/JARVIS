@@ -1,3 +1,4 @@
+import logging
 import threading
 import os
 from datetime import datetime
@@ -13,6 +14,8 @@ from memory.extractor import MemoryExtractor
 from voice.text_to_speech import TextToSpeech
 from voice.speech_to_text import VoiceAssistant
 from system_administration.file_manager import FileManager
+
+log = logging.getLogger("EVOX.BACKEND")
 
 class Backend(QObject):
     responseChunk = Signal(str)
@@ -30,9 +33,11 @@ class Backend(QObject):
     confirmCancelled = Signal()
     systemMessageAdded = Signal(str)
     textRecognized = Signal(str)
+    onlineModeChanged = Signal(bool)
 
     def __init__(self):
         super().__init__()
+        log.info("Backend initialisiert.")
         self._db = Database()
         self._mm = MemoryManager(self._db)
         self._cm = ContextManager(self._mm)
@@ -41,6 +46,7 @@ class Backend(QObject):
         self._voice.transcriptionReady.connect(self.textRecognized.emit) 
         self._voice.listeningChanged.connect(self._on_listening_changed)
         self._is_listening = False
+        self._is_online = False # STANDARD: OFFLINE
 
         self._conversation_id = self._ensure_active_conversation()
         self._history = self._load_history()
@@ -55,7 +61,9 @@ class Backend(QObject):
             pynvml.nvmlInit()
             self._nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
             self._has_gpu = True
-        except Exception: self._has_gpu = False
+        except Exception: 
+            self._has_gpu = False
+            log.warning("NVML (GPU Stats) konnte nicht initialisiert werden.")
 
         self._stats_timer = QTimer(self)
         self._stats_timer.timeout.connect(self._tick)
@@ -64,6 +72,7 @@ class Backend(QObject):
         self._ollama_timer = QTimer(self)
         self._ollama_timer.timeout.connect(self._check_ollama_async)
         self._ollama_timer.start(30000)
+        log.info("Ollama-Check im Hintergrund gestartet (alle 30s).")
         self._check_ollama_async()
 
     def _ensure_active_conversation(self):
@@ -104,34 +113,52 @@ class Backend(QObject):
             if r.status_code == 200:
                 if any(settings.OLLAMA_MODEL.split(":")[0] in m.get("name", "") for m in r.json().get("models", [])):
                     self._ollama_ok, self._ollama_message = True, f"Verbunden · {settings.OLLAMA_MODEL} bereit"
+                    log.success(f"Ollama verbunden. Modell '{settings.OLLAMA_MODEL}' ist bereit.")
                 else:
                     self._ollama_ok, self._ollama_message = True, "Verbunden · Modell fehlt"
+                    log.warning(f"Ollama verbunden, aber Modell '{settings.OLLAMA_MODEL}' fehlt.")
             else:
                 self._ollama_ok, self._ollama_message = False, f"HTTP {r.status_code}"
-        except: self._ollama_ok, self._ollama_message = False, "Offline"
+                log.error(f"Ollama HTTP Fehler: {r.status_code}")
+        except Exception as e:
+            self._ollama_ok, self._ollama_message = False, "Offline"
+            log.error(f"Ollama Verbindung fehlgeschlagen: {e}")
         self.ollamaStatusChanged.emit()
 
     @Slot()
     def refreshOllamaStatus(self): self._check_ollama_async()
 
+    @Slot()
+    def toggleOnlineMode(self):
+        self._is_online = not self._is_online
+        self.onlineModeChanged.emit(self._is_online)
+        status = "ONLINE" if self._is_online else "OFFLINE"
+        self.systemMessageAdded.emit(f"System mode switched to {status}.")
+        log.info(f"Online-Modus geändert: {status}")
+
     @Slot(str)
     def sendMessage(self, text):
         text = text.strip()
         if not text or self._thread is not None: return
+        
+        log.info(f"Neue Benutzereingabe empfangen: '{text}'")
+        
         self._db.insert_returning_id("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'user', ?)", (self._conversation_id, text))
         self._history.append({"role": "user", "content": text})
         self.historyChanged.emit()
         self._set_state("thinking")
+        log.debug("Status auf 'thinking' gesetzt.")
 
         from core.tool_manager import ToolManager
-        worker = ai_engine.ChatWorker(self._cm.build_messages(self._history), settings.OLLAMA_MODEL, tools=ToolManager().get_tools_definition())
+        tm = ToolManager()
+        tools = tm.get_tools_definition(is_online=self._is_online)
+        
+        worker = ai_engine.ChatWorker(self._cm.build_messages(self._history), settings.OLLAMA_MODEL, tools=tools, is_online=self._is_online)
         self._worker = worker
         
         worker.chunk.connect(self.responseChunk)
         worker.finished.connect(self._on_worker_finished)
         worker.failed.connect(self._on_worker_failed)
-        
-        # HIER IST DIE KORREKTE VERBINDUNG:
         worker.confirmRequired.connect(self._on_confirm_required)
         worker.confirmCancelled.connect(self.confirmCancelled.emit)
         worker.systemMessage.connect(self.systemMessageAdded.emit)
@@ -152,8 +179,8 @@ class Backend(QObject):
     def respondToConfirmation(self, confirmed):
         if self._worker: self._worker.set_confirmation(confirmed)
 
-    # HIER IST DIE METHODE (Sie fehlte vorher):
     def _on_confirm_required(self, tool_name: str, arg: str) -> None:
+        log.warning(f"Kritische Aktion angefordert: {tool_name} ({arg}). Warte auf Bestätigung...")
         self.confirmRequested.emit(arg)
 
     @Slot()
@@ -164,6 +191,7 @@ class Backend(QObject):
         self._history = []
         self.historyChanged.emit()
         self.historyReloaded.emit()
+        log.info("Chat-Verlauf geleert.")
 
     @Slot(result="QVariantList")
     def getCurrentMessages(self):
@@ -171,6 +199,7 @@ class Backend(QObject):
         return [{"role": r["role"], "content": r["content"], "time": str(r["created_at"])[11:16]} for r in rows]
 
     def _on_worker_finished(self, full):
+        log.success("KI-Antwort vollständig generiert.")
         self._history.append({"role": "assistant", "content": full})
         self._db.insert_returning_id("INSERT INTO messages (conversation_id, role, content) VALUES (?, 'assistant', ?)", (self._conversation_id, full))
         self.historyChanged.emit()
@@ -178,10 +207,13 @@ class Backend(QObject):
         self.responseFinished.emit(full)
         self._thread = None
         self._worker = None
-        if full.strip(): self._tts.speak(full)
+        if full.strip(): 
+            log.info("Sprachausgabe (TTS) gestartet.")
+            self._tts.speak(full)
         self._maybe_extract_memories()
 
     def _on_worker_failed(self, error):
+        log.error(f"KI-Worker Fehler: {error}")
         self._set_state("error")
         self.responseError.emit(error)
         self._thread = None
@@ -192,6 +224,8 @@ class Backend(QObject):
         if not settings.MEMORY_EXTRACTION_ENABLED or len(self._history) < 2: return
         u, a = self._history[-2], self._history[-1]
         if u["role"] != "user" or a["role"] != "assistant" or len(u["content"]) < settings.MEMORY_MIN_USER_LEN: return
+        
+        log.debug("Starte Gedächtnis-Extraktion im Hintergrund...")
         extractor = MemoryExtractor(f"Nutzer: {u['content']}\nAssistent: {a['content'][:800]}", self._mm.all_contents(), settings.OLLAMA_MODEL)
         extractor.extracted.connect(self._on_memories_extracted)
         threading.Thread(target=extractor.run, daemon=True).start()
@@ -202,6 +236,7 @@ class Backend(QObject):
             if self._mm.add(item["category"], item["content"], source="auto"):
                 added = True
                 self.memoryAdded.emit(item["content"])
+                log.info(f"Neue Erinnerung gespeichert: [{item['category']}] {item['content']}")
         if added: self.memoryChanged.emit()
 
     @Slot(int, str)
@@ -212,7 +247,9 @@ class Backend(QObject):
         if self._mm.delete(mem_id): self.memoryChanged.emit()
     
     @Slot(result=str)
-    def getHomeDirectory(self): return os.path.expanduser("~").replace("\\", "/")
+    def getHomeDirectory(self): 
+        import os
+        return os.path.expanduser("~").replace("\\", "/")
     @Slot(str, result="QVariantList")
     def listDirectory(self, path): return FileManager.list_directory(path)
 
@@ -230,6 +267,8 @@ class Backend(QObject):
     def gpuPercent(self): return self._gpu
     @Property(bool, notify=systemStatsChanged)
     def isListening(self): return self._is_listening
+    @Property(bool, notify=onlineModeChanged)
+    def isOnline(self): return self._is_online
     @Property(str, notify=timeChanged)
     def currentTime(self): return datetime.now().strftime("%H:%M:%S")
     @Property(str, notify=timeChanged)
